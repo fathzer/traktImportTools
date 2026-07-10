@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="fr">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect width=%22100%22 height=%22100%22 rx=%2220%22 fill=%22%23e11d48%22/><path d=%22M30 50 C30 35, 45 25, 60 30 M70 50 C70 65, 55 75, 40 70%22 stroke=%22white%22 stroke-width=%228%22 stroke-linecap=%22round%22 fill=%22none%22/><polygon points=%2260,20 75,32 60,45%22 fill=%22white%22/><polygon points=%2240,80 25,68 40,55%22 fill=%22white%22/></svg>">
+<head>
+    <meta charset="UTF-8">
+    <title>Trakt & TV Time Integration Fix</title>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; max-width: 900px; margin: 40px auto; padding: 0 20px; color: #333; }
+        .card { background: #fafafa; border: 1px solid #eaeaea; padding: 24px; border-radius: 12px; margin-bottom: 20px; }
+        .hidden { display: none; }
+        button { background: #000; color: #fff; border: none; padding: 10px 16px; border-radius: 6px; cursor: pointer; font-weight: 500; }
+        button:hover { background: #222; }
+        button.secondary { background: #fff; color: #333; border: 1px solid #ccc; margin-left: 8px; }
+        button.secondary:hover { background: #f5f5f5; }
+        button.action-btn { background: #2563eb; padding: 6px 12px; font-size: 13px; color: white; border: none; border-radius: 4px; cursor: pointer;}
+        button.action-btn:hover { background: #1d4ed8; }
+        button.action-btn:disabled { background: #9ca3af; cursor: not-allowed; }
+        table { width: 100%; border-collapse: collapse; margin-top: 20px; font-size: 14px; }
+        th, td { padding: 12px; text-align: left; border-bottom: 1px solid #e5e7eb; }
+        th { background-color: #f3f4f6; font-weight: 600; }
+        input[type="date"] { padding: 6px; border-radius: 4px; border: 1px solid #ccc; font-family: inherit; }
+        .loading-stub { font-style: italic; color: #6b7280; }
+    </style>
+</head>
+<body>
+
+    <!-- L'unique point d'ancrage de toute l'application -->
+    <div id="app-root"></div>
+
+    <script type="module">
+        import { initApplication } from './ui/mainUi.js';
+        initApplication();
+    </script>
+</body>
+</html>
