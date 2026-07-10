@@ -1,22 +1,21 @@
 import { runTraktAuth, clearToken } from '../traktApi.js';
 import { syncUiState } from './mainUi.js';
+import { t } from './i18n.js';
 
 export function renderAuthUi() {
-    // Rendu de la carte de statut
     document.getElementById('auth-container').innerHTML = `
         <div class="card">
-            <h3>Statut de la session</h3>
-            <p id="session-status">Vérification...</p>
-            <div id="logged-out-actions" class="hidden"><button id="btn-login">Se connecter</button></div>
-            <div id="loggedInActions" class="hidden"><button id="btn-logout" class="secondary">Déconnexion</button></div>
+            <h3>${t('sessionStatus')}</h3>
+            <p id="session-status">${t('checking')}</p>
+            <div id="logged-out-actions" class="hidden"><button id="btn-login">${t('login')}</button></div>
+            <div id="loggedInActions" class="hidden"><button id="btn-logout" class="secondary">${t('logout')}</button></div>
         </div>
     `;
 
-    // Rendu de la carte d'instructions (Device flow code)
     document.getElementById('instructions-container').innerHTML = `
         <div id="instructions-card" class="card hidden">
-            <h3>Action requise</h3>
-            <p>Ouvrez : <a id="device-url" target="_blank"></a> et saisissez : <strong id="device-code" style="color:#e11d48; font-size:20px; font-family:monospace;"></strong></p>
+            <h3>${t('actionRequired')}</h3>
+            <p>${t('instructions', {url: '<a id="device-url" target="_blank"></a>'})} <strong id="device-code" style="color:#e11d48; font-size:20px; font-family:monospace;"></strong></p>
         </div>
     `;
 }
@@ -27,11 +26,11 @@ export function updateAuthElement(isConnected) {
     const loggedInActions = document.getElementById('loggedInActions');
 
     if (isConnected) {
-        statusEl.innerHTML = "✅ Connecté à Trakt.";
+        statusEl.innerHTML = t('connected');
         loggedOutActions.classList.add('hidden');
         loggedInActions.classList.remove('hidden');
     } else {
-        statusEl.innerHTML = "❌ Non connecté.";
+        statusEl.innerHTML = t('disconnected');
         loggedOutActions.classList.remove('hidden');
         loggedInActions.classList.add('hidden');
     }
@@ -42,17 +41,17 @@ export function setupAuthListeners() {
     const statusEl = document.getElementById('session-status');
 
     document.getElementById('btn-login').addEventListener('click', () => {
-        statusEl.innerText = "Génération du code...";
+        statusEl.innerText = t('generatingCode');
         runTraktAuth(
             (url, code) => {
                 document.getElementById('device-url').href = url;
                 document.getElementById('device-url').innerText = url;
                 document.getElementById('device-code').innerText = code;
                 instructionsCard.classList.remove('hidden');
-                statusEl.innerText = "Liaison en cours...";
+                statusEl.innerText = t('linking');
             },
             () => { syncUiState(); },
-            (err) => { alert("Erreur Auth : " + err.message); syncUiState(); }
+            (err) => { alert("Error: " + err.message); syncUiState(); }
         );
     });
 

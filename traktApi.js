@@ -87,19 +87,27 @@ export async function sendRatingsBatch(episodesBatch) {
     return await response.json();
 }
 
-// Reçoit le tableau standardisé produit en amont
-export async function importRatings(cleanRatings, onProgress) {
-    const total = cleanRatings.length;
-    if (total === 0) return { added: 0 };
+export async function importRatings(allEpisodes, onProgress, getIsAborted) {
+    const episodesToRate = allEpisodes.filter(ep => ep.status === 'pending');
+    const total = episodesToRate.length;
+    
+    if (total === 0) return { added: 0, updatedEpisodes: allEpisodes, aborted: false };
 
     const chunkSize = 100;
     let processed = 0;
+    let totalAdded = 0;
 
     for (let i = 0; i < total; i += chunkSize) {
-        const chunk = cleanRatings.slice(i, i + chunkSize);
+        // 🛑 Vérification du bouton Annuler avant de lancer le lot suivant
+        if (getIsAborted && getIsAborted()) {
+            // On remet en 'pending' les épisodes restants non traités
+            return { added: totalAdded, updatedEpisodes: allEpisodes, aborted: true };
+        }
+
+        const chunk = episodesToRate.slice(i, i + chunkSize);
+        const validChunk = chunk.filter(item => item.tvdbId);
         
-        // Mapping du format interne vers la structure attendue par l'API de Trakt
-        const traktPayload = chunk.map(item => ({
+        const traktPayload = validChunk.map(item => ({
             rating: item.rating,
             rated_at: item.ratedAt || undefined,
             ids: { tvdb: item.tvdbId }
@@ -107,10 +115,25 @@ export async function importRatings(cleanRatings, onProgress) {
 
         if (onProgress) onProgress(processed, total);
         
-        await sendRatingsBatch(traktPayload);
+        const responseData = await sendRatingsBatch(traktPayload);
+        totalAdded += responseData.added?.episodes || 0;
+
+        const missingIds = new Set(
+            responseData.not_found?.episodes?.map(ep => ep.ids.tvdb) || []
+        );
+
+        chunk.forEach(item => {
+            if (!item.tvdbId || missingIds.has(item.tvdbId)) {
+                item.status = 'not_found';
+            } else {
+                item.status = 'success';
+            }
+        });
+
         processed += chunk.length;
     }
 
     if (onProgress) onProgress(processed, total);
-    return { added: total };
+    
+    return { added: totalAdded, updatedEpisodes: allEpisodes, aborted: false };
 }
