@@ -1,5 +1,4 @@
-# Trakt Watched Date Editor Prototype
-
+# Trakt TV Time import helper
 This tool is designed to diagnose and remediate import issues from TV Time to Trakt.
 
 It is a lightweight, client-side JavaScript application to explore your Trakt movie watch history, update incorrect playback timestamps, and import your TV Time episode ratings using the `TV Time Liberator` export.
