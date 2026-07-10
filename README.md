@@ -9,7 +9,7 @@ A lightweight, client-side JavaScript prototype to explore your Trakt movie watc
 - **Date Correction:** Safely updates movie playback dates by removing the stale entry and creating a new record at the desired historical timestamp.
 
 ## Project Structure
-```text
+
 ├── index.html       # The main user interface
 ├── auth.js          # Authentication and Device Flow handling module
 ├── traktApi.js      # Core module managing GET/POST requests to Trakt API

@@ -2,7 +2,7 @@
 <html lang="fr">
 <head>
     <meta charset="UTF-8">
-    <title>Prototype Trakt - Éditeur de dates</title>
+    <title>Prototype Trakt - Modulaire</title>
     <style>
         body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; max-width: 900px; margin: 40px auto; padding: 0 20px; color: #333; }
         .card { background: #fafafa; border: 1px solid #eaeaea; padding: 24px; border-radius: 12px; margin-bottom: 20px; }
@@ -11,12 +11,9 @@
         button:hover { background: #222; }
         button.secondary { background: #fff; color: #333; border: 1px solid #ccc; margin-left: 8px; }
         button.secondary:hover { background: #f5f5f5; }
-        button.action-btn { background: #2563eb; padding: 6px 12px; font-size: 13px; }
+        button.action-btn { background: #2563eb; padding: 6px 12px; font-size: 13px; color: white; border: none; border-radius: 4px; cursor: pointer;}
         button.action-btn:hover { background: #1d4ed8; }
         button.action-btn:disabled { background: #9ca3af; cursor: not-allowed; }
-        .status { font-weight: 600; color: #0066cc; }
-        
-        /* Styles de la table d'historique */
         table { width: 100%; border-collapse: collapse; margin-top: 20px; font-size: 14px; }
         th, td { padding: 12px; text-align: left; border-bottom: 1px solid #e5e7eb; }
         th { background-color: #f3f4f6; font-weight: 600; }
@@ -26,166 +23,18 @@
 </head>
 <body>
 
-    <h1>Prototype Trakt - Gestion des Dates</h1>
+    <h1>Prototype Trakt - Dashboard</h1>
 
-    <div class="card">
-        <h3>Statut de la session</h3>
-        <p id="session-status">Vérification du statut...</p>
-        <div id="logged-out-actions" class="hidden">
-            <button id="btn-login">Se connecter (Device Flow)</button>
-        </div>
-        <div id="logged-in-actions" class="hidden">
-            <button id="btn-logout" class="secondary">Déconnexion</button>
-        </div>
-    </div>
-
-    <div id="instructions-card" class="card hidden">
-        <h3>Action requise</h3>
-        <p>Ouvrez : <a id="device-url" target="_blank"></a> et saisissez : <strong id="device-code" style="color:#e11d48; font-size:20px; font-family:monospace;"></strong></p>
-    </div>
-
-    <div id="history-section" class="card hidden">
-        <h3>Historique des visionnages (<span id="movie-count">0</span>)</h3>
-        <button id="btn-refresh">Charger / Rafraîchir l'historique</button>
-        <span id="global-action-status" style="margin-left: 15px; font-weight: bold;"></span>
-        
-        <table id="history-table">
-            <thead>
-                <tr>
-                    <th>ID Trakt</th>
-                    <th>ID IMDb</th>
-                    <th>ID TMDb</th>
-                    <th>Titre</th>
-                    <th>Date de visionnage</th>
-                    <th>Action</th>
-                </tr>
-            </thead>
-            <tbody id="history-body">
-                <tr>
-                    <td colspan="4" class="loading-stub">Cliquez sur Charger pour récupérer vos données.</td>
-                </tr>
-            </tbody>
-        </table>
-    </div>
+    <div id="auth-container"></div>
+    <div id="instructions-container"></div>
+    <div id="ratings-container"></div>
+    <div id="movies-container"></div>
 
     <script type="module">
-        import { getStoredToken, runDeviceFlow, clearToken } from './auth.js';
-        import { fetchMoviesHistory, updateMovieWatchedDate } from './traktApi.js';
-
-        const statusEl = document.getElementById('session-status');
-        const loggedOutActions = document.getElementById('logged-out-actions');
-        const loggedInActions = document.getElementById('logged-in-actions');
-        const instructionsCard = document.getElementById('instructions-card');
-        const historySection = document.getElementById('history-section');
-        const historyBody = document.getElementById('history-body');
-        const movieCountEl = document.getElementById('movie-count');
-        const globalStatusEl = document.getElementById('global-action-status');
-
-        function checkSession() {
-            const token = getStoredToken();
-            if (token) {
-                statusEl.innerHTML = "✅ Connecté à Trakt.";
-                loggedOutActions.classList.add('hidden');
-                loggedInActions.classList.remove('hidden');
-                historySection.classList.remove('hidden');
-            } else {
-                statusEl.innerHTML = "❌ Non connecté.";
-                loggedOutActions.classList.remove('hidden');
-                loggedInActions.classList.add('hidden');
-                instructionsCard.classList.add('hidden');
-                historySection.classList.add('hidden');
-            }
-        }
-
-        // Connexion
-        document.getElementById('btn-login').addEventListener('click', () => {
-            runDeviceFlow(
-                (url, code) => {
-                    document.getElementById('device-url').href = url;
-                    document.getElementById('device-url').innerText = url;
-                    document.getElementById('device-code').innerText = code;
-                    instructionsCard.classList.remove('hidden');
-                },
-                () => { checkSession(); },
-                (err) => { alert("Erreur d'auth : " + err.message); }
-            );
-        });
-
-        // Déconnexion
-        document.getElementById('btn-logout').addEventListener('click', () => {
-            clearToken();
-            checkSession();
-        });
-
-        // Charger / Rafraîchir la liste
-        async function loadHistory() {
-            historyBody.innerHTML = `<tr><td colspan="6" class="loading-stub">Chargement des films depuis Trakt...</td></tr>`;
-            globalStatusEl.innerText = "";
-            try {
-                const history = await fetchMoviesHistory();
-                movieCountEl.innerText = history.length;
-                
-                if (history.length === 0) {
-                    historyBody.innerHTML = `<tr><td colspan="6" class="loading-stub">Aucun film trouvé dans votre historique.</td></tr>`;
-                    return;
-                }
-
-                historyBody.innerHTML = ""; // Vider le stub
-                
-                history.forEach(item => {
-                    const rawDate = item.watched_at ? item.watched_at.split('T')[0] : "";
-                    
-                    // Récupération sécurisée des IDs externes
-                    const imdbId = item.movie.ids.imdb || 'N/A';
-                    const tmdbId = item.movie.ids.tmdb || 'N/A';
-                    
-                    const tr = document.createElement('tr');
-                    tr.innerHTML = `
-                        <td><code>${item.movie.ids.trakt}</code></td>
-                        <td><code>${imdbId}</code></td>
-                        <td><code>${tmdbId}</code></td>
-                        <td><strong>${item.movie.title}</strong> <span style="color:#6b7280">(${item.movie.year})</span></td>
-                        <td><input type="date" value="${rawDate}" id="date-${item.id}"></td>
-                        <td><button class="action-btn" id="btn-${item.id}">Mettre à jour</button></td>
-                    `;
-                    
-                    historyBody.appendChild(tr);
-
-                    document.getElementById(`btn-${item.id}`).addEventListener('click', async (e) => {
-                        const newDate = document.getElementById(`date-${item.id}`).value;
-                        if (!newDate) {
-                            alert("Veuillez sélectionner une date valide.");
-                            return;
-                        }
-                        
-                        const btn = e.target;
-                        btn.disabled = true;
-                        btn.innerText = "En cours...";
-                        globalStatusEl.style.color = "#2563eb";
-                        globalStatusEl.innerText = `Modification de "${item.movie.title}"...`;
-
-                        try {
-                            await updateMovieWatchedDate(item.id, item.movie.ids, newDate);
-                            globalStatusEl.style.color = "#16a34a";
-                            globalStatusEl.innerText = `✅ "${item.movie.title}" mis à jour ! Rechargement...`;
-                            setTimeout(loadHistory, 1500);
-                        } catch (err) {
-                            globalStatusEl.style.color = "#dc2626";
-                            globalStatusEl.innerText = `❌ Erreur : ${err.message}`;
-                            btn.disabled = false;
-                            btn.innerText = "Mettre à jour";
-                        }
-                    });
-                });
-
-            } catch (err) {
-                historyBody.innerHTML = `<tr><td colspan="6" style="color:#dc2626">Erreur lors de la récupération : ${err.message}</td></tr>`;
-            }
-        }
-        document.getElementById('btn-refresh').addEventListener('click', loadHistory);
-
-        // Au démarrage
-        checkSession();
+        import { initApplication } from './ui/mainUi.js';
+        
+        // C'est le mainUi qui va tout piloter (rendu + écouteurs + état)
+        initApplication();
     </script>
 </body>
 </html>
