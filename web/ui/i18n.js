@@ -33,6 +33,8 @@ const TRANSLATIONS = {
         
         // Rapport Ratings
         reportSummary: "📊 Consulter le rapport détaillé des épisodes",
+        titleSuccesses: "Succès",
+        titleFailures: "Échecs / Problèmes",
         filterLabel: "Filtrer par statut :",
         filterAll: "Tout",
         filterSuccess: "✅ Notés & Trouvés",
@@ -41,8 +43,7 @@ const TRANSLATIONS = {
         thShow: "Série",
         thEpisode: "Épisode",
         thTvdb: "ID TVDB",
-        thTvTimeRating: "Note TV Time",
-        thTraktRating: "Note Trakt",
+        thRating: "Note",
         thStatus: "Statut Synchro",
         badgeUnrated: "🛑 Non noté",
         badgeOk: "✅ OK",
@@ -99,6 +100,8 @@ const TRANSLATIONS = {
         
         // Ratings Report
         reportSummary: "📊 View detailed episode report",
+        titleSuccesses: "Successes",
+        titleFailures: "Failures / Problems",
         filterLabel: "Filter by status:",
         filterAll: "All",
         filterSuccess: "✅ Rated & Found",
@@ -107,8 +110,7 @@ const TRANSLATIONS = {
         thShow: "Show",
         thEpisode: "Episode",
         thTvdb: "TVDB ID",
-        thTvTimeRating: "TV Time Rating",
-        thTraktRating: "Trakt Rating",
+        thRating: "Rating",
         thStatus: "Sync Status",
         badgeUnrated: "🛑 Unrated",
         badgeOk: "✅ OK",

@@ -1,0 +1,31 @@
+# Core Philosophy
+- Maintain a clean, modular, and strictly decoupled architecture.
+- Always separate concerns: UI rendering, core business logic, API communication layer, and translation/i18n must reside in distinct files.
+- Favor clarity, readability, and maintainable structures over overly clever "all-in-one" code blocks.
+- No monolithic files. Keep DOM manipulation entirely isolated from data processing and API utilities.
+
+# Language & Tech Stack
+- The application is built in pure vanilla JavaScript (ES6+ modules), HTML5, and CSS3.
+- No external heavy frameworks (no React, no Vue, etc.).
+- Use clean, semantic HTML and scannable, modern layout patterns.
+
+# Documentation & Code Comments
+- All methods, functions, and major logical blocks must include clear JSDoc-style comments in English explaining:
+  - What the method does (the intent, not just the "how").
+  - Parameter types and descriptions (`@param`).
+  - Return types and descriptions (`@return`).
+- CRITICAL: When updating, refactoring, or expanding existing code, ALWAYS preserve, update, or expand the corresponding JSDoc comments. Never leave modified code undocumented or with outdated comments.
+
+# UI Rules
+- Keep UI components reusable and lightweight.
+- UI modules should only handle DOM rendering, capturing user events, and updating the view based on state.
+- Do not hardcode user-facing strings in UI modules; always use the translation/i18n helper (e.g., `t('key')`).
+- Keep CSS separated or cleanly encapsulated in dedicated style files or strict layout configurations. Avoid mixing CSS style injection with heavy logic.
+
+# API & Data Flow Rules
+- Keep the API communication layer (e.g., Trakt API) completely agnostic of DOM elements. It should take raw inputs, perform network tasks, handle status codes, and return clean data structures or throw explicit errors.
+- Ensure efficient data processing. When performing bulk network operations (e.g., syncing history or ratings), prefer batching (chunks of 100) and avoid nested, sequential HTTP requests that create bottlenecks.
+- Implement robust error handling. In batch processing, clearly track and return failures (e.g., "not_found" IDs) to allow upstream layers to isolate errors.
+
+# State & Persistence
+- Manage state explicitly. Use a dedicated State Store / LocalStorage manager to persist user state or error logs between sessions if required, keeping it decoupled from UI rendering.
