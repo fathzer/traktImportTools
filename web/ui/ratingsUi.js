@@ -11,6 +11,8 @@ let totalProgressCount = 0;
 
 const STORAGE_EPISODES_KEY = 'trakt_import_episodes';
 const STORAGE_FILE_NAME_KEY = 'trakt_import_file_name';
+const STORAGE_ADDED_HISTORY_KEY = 'trakt_import_added_history';
+const STORAGE_ADDED_RATINGS_KEY = 'trakt_import_added_ratings';
 
 export function renderRatingsUi() {
     if (localEpisodesStore.length === 0) {
@@ -53,7 +55,7 @@ export function renderRatingsUi() {
                     ${t('btnClear') || 'Réinitialiser'}
                 </button>
                 
-                <button id="btn-cancel-ratings" class="secondary ${isImportRunning ? '' : 'hidden'}\" style=\"border-color: #dc2626; color: #dc2626; padding: 6px 12px; font-size: 13px;\">
+                <button id="btn-cancel-ratings" class="secondary ${isImportRunning ? '' : 'hidden'}" style="border-color: #dc2626; color: #dc2626; padding: 6px 12px; font-size: 13px;">
                     ${t('btnCancel')}
                 </button>
             </div>
@@ -126,23 +128,32 @@ function restoreSummaryMessage() {
     const statusEl = document.getElementById('ratings-status');
     if (!statusEl || localEpisodesStore.length === 0) return;
 
-    const successes = localEpisodesStore.filter(ep => ep.status === 'success');
+    // Récupération des décomptes de synchronisation réels persistés
+    const addedHistory = parseInt(localStorage.getItem(STORAGE_ADDED_HISTORY_KEY) || "0", 10);
+    const addedRatings = parseInt(localStorage.getItem(STORAGE_ADDED_RATINGS_KEY) || "0", 10);
+
     const pendings = localEpisodesStore.filter(ep => ep.status === 'pending');
     const notFounds = localEpisodesStore.filter(ep => ep.status === 'not_found');
+    const incoherents = localEpisodesStore.filter(ep => ep.status === 'incoherent');
 
     if (isImportRunning) return;
 
     if (pendings.length > 0) {
         statusEl.style.color = "#b45309";
-        statusEl.innerText = t('statusAborted', { added: successes.length });
+        statusEl.innerText = t('statusAborted', { watched: addedHistory, rated: addedRatings });
     } else {
         statusEl.style.color = "#16a34a";
-        statusEl.innerText = t('statusSuccess', { added: successes.length });
+        statusEl.innerText = t('statusSuccess', { watched: addedHistory, rated: addedRatings });
     }
 
     if (notFounds.length > 0) {
         statusEl.style.color = "#dc2626";
         statusEl.innerText += t('statusNotFoundWarning', { count: notFounds.length });
+    }
+    
+    if (incoherents.length > 0) {
+        statusEl.style.color = "#dc2626";
+        statusEl.innerText += ` ⚠️ ${incoherents.length} épisode(s) rejeté(s) car noté(s) mais sans historique de visionnage.`;
     }
 }
 
@@ -164,7 +175,7 @@ function renderReportTables() {
     failureBody.innerHTML = '';
 
     const successes = localEpisodesStore.filter(ep => ep.status === 'success');
-    const failures = localEpisodesStore.filter(ep => ep.status === 'not_found' || ep.status === 'pending');
+    const failures = localEpisodesStore.filter(ep => ep.status === 'not_found' || ep.status === 'pending' || ep.status === 'incoherent');
 
     if (successes.length === 0) {
         successBody.innerHTML = `<tr><td colspan="5" class="loading-stub" style="text-align:center; padding: 20px;">${t('noMatch')}</td></tr>`;
@@ -187,8 +198,10 @@ function renderReportTables() {
     } else {
         failures.forEach(ep => {
             const tr = document.createElement('tr');
+            
             let statusBadge = t('badgeNotFound');
             if (ep.status === 'pending') statusBadge = t('badgeAborted');
+            if (ep.status === 'incoherent') statusBadge = t('badgeIncoherent') || '❌ Incohérent';
 
             tr.innerHTML = `
                 <td style="padding: 10px; border-bottom: 1px solid #e5e7eb;"><strong>${ep.showTitle}</strong></td>
@@ -209,7 +222,7 @@ function updateReportCounters() {
     if (!successCountEl || !failureCountEl) return;
 
     const successes = localEpisodesStore.filter(ep => ep.status === 'success');
-    const failures = localEpisodesStore.filter(ep => ep.status === 'not_found' || ep.status === 'pending');
+    const failures = localEpisodesStore.filter(ep => ep.status === 'not_found' || ep.status === 'pending' || ep.status === 'incoherent');
 
     successCountEl.innerText = successes.length;
     failureCountEl.innerText = failures.length;
@@ -236,7 +249,7 @@ function updateUiImportState(running) {
             btnCancel.innerText = t('btnCancel');
         }
     } else {
-        if (btnImport) btnImport.disabled = true; // 🛠 Remis à true par défaut si l'import s'arrête sans fichier dans le champ
+        if (btnImport) btnImport.disabled = true;
         if (btnCancel) btnCancel.classList.add('hidden');
         
         if (btnReset) {
@@ -252,7 +265,6 @@ export function setupRatingsListeners() {
     const btnReset = document.getElementById('btn-reset-ratings');
     const fileInput = document.getElementById('ratings-file');
 
-    // 🛠 FIX-ERGONOMIE : Gestion dynamique de l'activation du bouton d'import
     if (fileInput && btnImport) {
         fileInput.onchange = () => {
             if (fileInput.files && fileInput.files.length > 0) {
@@ -281,6 +293,8 @@ export function setupRatingsListeners() {
             
             localStorage.removeItem(STORAGE_EPISODES_KEY);
             localStorage.removeItem(STORAGE_FILE_NAME_KEY);
+            localStorage.removeItem(STORAGE_ADDED_HISTORY_KEY);
+            localStorage.removeItem(STORAGE_ADDED_RATINGS_KEY);
 
             renderRatingsUi();
             
@@ -297,7 +311,7 @@ export function setupRatingsListeners() {
 
     btnImport.onclick = () => {
         const file = fileInput.files[0];
-        if (!file) return; // Plus besoin d'alert(), le bouton est verrouillé de toute façon
+        if (!file) return;
 
         updateUiImportState(true);
         
@@ -329,12 +343,13 @@ export function setupRatingsListeners() {
                 
                 const result = await importRatings(
                     localEpisodesStore, 
-                    (current, total) => {
+                    (current, total, step) => {
                         currentProgressCount = current;
                         totalProgressCount = total;
                         const progressStatusEl = document.getElementById('ratings-status');
                         if (progressStatusEl) {
-                            progressStatusEl.innerText = t('statusProgress', { current, total });
+                            const stepLabel = step === 'history' ? t('statusSyncHistory') : t('statusSyncRatings');
+                            progressStatusEl.innerText = `${stepLabel} (${current}/${total})`;
                         }
                     },
                     () => isImportAborted
@@ -342,6 +357,10 @@ export function setupRatingsListeners() {
 
                 localEpisodesStore = result.updatedEpisodes;
                 localStorage.setItem(STORAGE_EPISODES_KEY, JSON.stringify(localEpisodesStore));
+                
+                // Persistance des compteurs détaillés de cette session d'import
+                localStorage.setItem(STORAGE_ADDED_HISTORY_KEY, result.addedHistory.toString());
+                localStorage.setItem(STORAGE_ADDED_RATINGS_KEY, result.addedRatings.toString());
 
                 updateUiImportState(false);
                 
