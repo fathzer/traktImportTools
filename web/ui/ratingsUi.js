@@ -4,24 +4,65 @@ import { t } from './i18n.js';
 
 let localEpisodesStore = [];
 let isImportAborted = false;
+let isImportRunning = false;
+
+let currentProgressCount = 0;
+let totalProgressCount = 0;
+
+const STORAGE_EPISODES_KEY = 'trakt_import_episodes';
+const STORAGE_FILE_NAME_KEY = 'trakt_import_file_name';
 
 export function renderRatingsUi() {
+    if (localEpisodesStore.length === 0) {
+        const storedEpisodes = localStorage.getItem(STORAGE_EPISODES_KEY);
+        if (storedEpisodes) {
+            try {
+                localEpisodesStore = JSON.parse(storedEpisodes);
+            } catch (e) {
+                console.error("Erreur lors de la lecture des épisodes persistés :", e);
+                localEpisodesStore = [];
+            }
+        }
+    }
+
+    const storedFileName = localStorage.getItem(STORAGE_FILE_NAME_KEY);
+    const hasDataLoaded = localEpisodesStore && localEpisodesStore.length > 0;
+    
+    const fileSelectorClass = (hasDataLoaded || isImportRunning) ? 'hidden' : '';
+    const fileDetailsClass = (hasDataLoaded || isImportRunning) ? '' : 'hidden';
+    const reportClass = (hasDataLoaded && !isImportRunning) ? '' : 'hidden';
+
+    const isResetVisible = hasDataLoaded && !isImportRunning;
+
     document.getElementById('ratings-container').innerHTML = `
         <div id="ratings-section" class="card hidden">
             <h3>${t('ratingsTitle')}</h3>
             <p style="font-size: 14px; color: #6b7280;">${t('ratingsDesc')}</p>
             
-            <div style="margin-top: 15px;">
+            <div id="ratings-file-selector" class="${fileSelectorClass}" style="margin-top: 15px;">
                 <input type="file" id="ratings-file" accept=".json" style="font-size: 14px;">
-                <button id="btn-import-ratings" class="action-btn" style="margin-left: 10px;">${t('btnImport')}</button>
-                <button id="btn-cancel-ratings" class="secondary hidden" style="border-color: #dc2626; color: #dc2626;">${t('btnCancel')}</button>
+                <button id="btn-import-ratings" class="action-btn" style="margin-left: 10px;" disabled>${t('btnImport')}</button>
             </div>
+
+            <div id="ratings-file-details" class="${fileDetailsClass}" style="margin-top: 15px; display: flex; align-items: center; gap: 10px;">
+                <span id="ratings-active-filename" style="font-weight: 500; font-size: 14px; color: #1e293b;">
+                    ${(storedFileName && (hasDataLoaded || isImportRunning)) ? `📄 ${t('fileImported') || 'Fichier importé'} : ${storedFileName}` : ''}
+                </span>
+                
+                <button id="btn-reset-ratings" class="secondary ${isResetVisible ? '' : 'hidden'}" style="border-color: #ef4444; color: #ef4444; padding: 6px 12px; font-size: 13px;">
+                    ${t('btnClear') || 'Réinitialiser'}
+                </button>
+                
+                <button id="btn-cancel-ratings" class="secondary ${isImportRunning ? '' : 'hidden'}\" style=\"border-color: #dc2626; color: #dc2626; padding: 6px 12px; font-size: 13px;\">
+                    ${t('btnCancel')}
+                </button>
+            </div>
+
             <p id="ratings-status" style="margin-top: 15px; font-weight: bold; font-size: 14px;"></p>
             
-            <details id="ratings-report-details" class="hidden" style="margin-top: 20px; border: 1px solid #ccc; border-radius: 8px; padding: 15px; background: #fff;">
+            <details id="ratings-report-details" class="${reportClass}" style="margin-top: 20px; border: 1px solid #ccc; border-radius: 8px; padding: 15px; background: #fff;" ${hasDataLoaded && !isImportRunning ? 'open' : ''}>
                 <summary style="cursor: pointer; font-weight: bold; padding: 5px;">${t('reportSummary')}</summary>
                 
-                <!-- Section Succès -->
                 <div style="margin-top: 15px; margin-bottom: 25px;">
                     <h4 style="margin: 0 0 10px 0; color: #16a34a; display: flex; align-items: center; justify-content: space-between; font-size: 14px;">
                         <span>${t('titleSuccesses')}</span>
@@ -43,7 +84,6 @@ export function renderRatingsUi() {
                     </div>
                 </div>
 
-                <!-- Section Échecs -->
                 <div style="margin-top: 15px;">
                     <h4 style="margin: 0 0 10px 0; color: #dc2626; display: flex; align-items: center; justify-content: space-between; font-size: 14px;">
                         <span>${t('titleFailures')}</span>
@@ -68,18 +108,58 @@ export function renderRatingsUi() {
             </details>
         </div>
     `;
+
+    if (isImportRunning) {
+        const statusEl = document.getElementById('ratings-status');
+        if (statusEl) {
+            statusEl.style.color = "#2563eb";
+            statusEl.innerText = t('statusProgress', { current: currentProgressCount, total: totalProgressCount });
+        }
+    } else if (hasDataLoaded) {
+        updateReportCounters();
+        renderReportTables();
+        restoreSummaryMessage();
+    }
+}
+
+function restoreSummaryMessage() {
+    const statusEl = document.getElementById('ratings-status');
+    if (!statusEl || localEpisodesStore.length === 0) return;
+
+    const successes = localEpisodesStore.filter(ep => ep.status === 'success');
+    const pendings = localEpisodesStore.filter(ep => ep.status === 'pending');
+    const notFounds = localEpisodesStore.filter(ep => ep.status === 'not_found');
+
+    if (isImportRunning) return;
+
+    if (pendings.length > 0) {
+        statusEl.style.color = "#b45309";
+        statusEl.innerText = t('statusAborted', { added: successes.length });
+    } else {
+        statusEl.style.color = "#16a34a";
+        statusEl.innerText = t('statusSuccess', { added: successes.length });
+    }
+
+    if (notFounds.length > 0) {
+        statusEl.style.color = "#dc2626";
+        statusEl.innerText += t('statusNotFoundWarning', { count: notFounds.length });
+    }
 }
 
 export function toggleRatingsVisibility(isConnected) {
     const section = document.getElementById('ratings-section');
-    if (isConnected) section.classList.remove('hidden');
-    else section.classList.add('hidden');
+    if (section) {
+        if (isConnected) section.classList.remove('hidden');
+        else section.classList.add('hidden');
+    }
 }
 
 function renderReportTables() {
     const successBody = document.getElementById('ratings-success-body');
     const failureBody = document.getElementById('ratings-failure-body');
     
+    if (!successBody || !failureBody) return;
+
     successBody.innerHTML = '';
     failureBody.innerHTML = '';
 
@@ -124,84 +204,170 @@ function renderReportTables() {
 }
 
 function updateReportCounters() {
+    const successCountEl = document.getElementById('cnt-success');
+    const failureCountEl = document.getElementById('cnt-failure');
+    if (!successCountEl || !failureCountEl) return;
+
     const successes = localEpisodesStore.filter(ep => ep.status === 'success');
     const failures = localEpisodesStore.filter(ep => ep.status === 'not_found' || ep.status === 'pending');
 
-    document.getElementById('cnt-success').innerText = successes.length;
-    document.getElementById('cnt-failure').innerText = failures.length;
+    successCountEl.innerText = successes.length;
+    failureCountEl.innerText = failures.length;
+}
+
+function updateUiImportState(running) {
+    isImportRunning = running;
+    
+    const fileSelector = document.getElementById('ratings-file-selector');
+    const fileDetails = document.getElementById('ratings-file-details');
+    const btnReset = document.getElementById('btn-reset-ratings');
+    const btnCancel = document.getElementById('btn-cancel-ratings');
+    const btnImport = document.getElementById('btn-import-ratings');
+
+    const hasDataLoaded = localEpisodesStore && localEpisodesStore.length > 0;
+
+    if (running) {
+        if (fileSelector) fileSelector.classList.add('hidden');
+        if (fileDetails) fileDetails.classList.remove('hidden');
+        if (btnReset) btnReset.classList.add('hidden');
+        if (btnCancel) {
+            btnCancel.classList.remove('hidden');
+            btnCancel.disabled = false;
+            btnCancel.innerText = t('btnCancel');
+        }
+    } else {
+        if (btnImport) btnImport.disabled = true; // 🛠 Remis à true par défaut si l'import s'arrête sans fichier dans le champ
+        if (btnCancel) btnCancel.classList.add('hidden');
+        
+        if (btnReset) {
+            if (hasDataLoaded) btnReset.classList.remove('hidden');
+            else btnReset.classList.add('hidden');
+        }
+    }
 }
 
 export function setupRatingsListeners() {
     const btnImport = document.getElementById('btn-import-ratings');
     const btnCancel = document.getElementById('btn-cancel-ratings');
+    const btnReset = document.getElementById('btn-reset-ratings');
     const fileInput = document.getElementById('ratings-file');
-    const statusEl = document.getElementById('ratings-status');
-    const reportDetails = document.getElementById('ratings-report-details');
 
-    btnCancel.addEventListener('click', () => {
-        isImportAborted = true;
-        btnCancel.disabled = true;
-        btnCancel.innerText = t('btnCancelling');
-    });
+    // 🛠 FIX-ERGONOMIE : Gestion dynamique de l'activation du bouton d'import
+    if (fileInput && btnImport) {
+        fileInput.onchange = () => {
+            if (fileInput.files && fileInput.files.length > 0) {
+                btnImport.disabled = false;
+            } else {
+                btnImport.disabled = true;
+            }
+        };
+    }
 
-    btnImport.addEventListener('click', () => {
+    if (btnCancel) {
+        btnCancel.onclick = () => {
+            isImportAborted = true;
+            btnCancel.disabled = true;
+            btnCancel.innerText = t('btnCancelling');
+        };
+    }
+
+    if (btnReset) {
+        btnReset.onclick = () => {
+            localEpisodesStore = [];
+            isImportAborted = false;
+            isImportRunning = false;
+            currentProgressCount = 0;
+            totalProgressCount = 0;
+            
+            localStorage.removeItem(STORAGE_EPISODES_KEY);
+            localStorage.removeItem(STORAGE_FILE_NAME_KEY);
+
+            renderRatingsUi();
+            
+            const token = localStorage.getItem('trakt_access_token');
+            if (token) {
+                toggleRatingsVisibility(true);
+            }
+            
+            setupRatingsListeners();
+        };
+    }
+
+    if (!btnImport) return;
+
+    btnImport.onclick = () => {
         const file = fileInput.files[0];
-        if (!file) return alert(t('selectFileAlert'));
+        if (!file) return; // Plus besoin d'alert(), le bouton est verrouillé de toute façon
 
-        btnImport.disabled = true;
-        btnCancel.disabled = false;
-        btnCancel.innerText = t('btnCancel');
-        btnCancel.classList.remove('hidden');
-        reportDetails.classList.add('hidden');
-        statusEl.style.color = "#2563eb";
-        statusEl.innerText = t('statusReading');
+        updateUiImportState(true);
+        
+        const activeFileNameEl = document.getElementById('ratings-active-filename');
+        if (activeFileNameEl) activeFileNameEl.innerText = `📄 ${t('fileImported') || 'Fichier importé'} : ${file.name}`;
+        localStorage.setItem(STORAGE_FILE_NAME_KEY, file.name);
+
+        const reportDetails = document.getElementById('ratings-report-details');
+        if (reportDetails) reportDetails.classList.add('hidden');
+
+        const statusEl = document.getElementById('ratings-status');
+        if (statusEl) {
+            statusEl.style.color = "#2563eb";
+            statusEl.innerText = t('statusReading');
+        }
         isImportAborted = false;
 
         const reader = new FileReader();
         reader.onload = async (e) => {
             try {
+                const dynamicStatusEl = document.getElementById('ratings-status');
+                if (dynamicStatusEl) dynamicStatusEl.innerText = t('statusParsing');
+                
                 const rawJson = JSON.parse(e.target.result);
-                statusEl.innerText = t('statusParsing');
                 localEpisodesStore = parseTvTimeRatings(rawJson);
+                localStorage.setItem(STORAGE_EPISODES_KEY, JSON.stringify(localEpisodesStore));
 
-                statusEl.innerText = t('statusSyncing');
+                if (dynamicStatusEl) dynamicStatusEl.innerText = t('statusSyncing');
+                
                 const result = await importRatings(
                     localEpisodesStore, 
                     (current, total) => {
-                        statusEl.innerText = t('statusProgress', {current, total});
+                        currentProgressCount = current;
+                        totalProgressCount = total;
+                        const progressStatusEl = document.getElementById('ratings-status');
+                        if (progressStatusEl) {
+                            progressStatusEl.innerText = t('statusProgress', { current, total });
+                        }
                     },
                     () => isImportAborted
                 );
 
                 localEpisodesStore = result.updatedEpisodes;
+                localStorage.setItem(STORAGE_EPISODES_KEY, JSON.stringify(localEpisodesStore));
+
+                updateUiImportState(false);
+                
                 updateReportCounters();
                 renderReportTables();
-                
-                const notFoundCount = localEpisodesStore.filter(e => e.status === 'not_found').length;
+                restoreSummaryMessage();
 
-                if (result.aborted) {
-                    statusEl.style.color = "#b45309";
-                    statusEl.innerText = t('statusAborted', {added: result.added});
-                } else {
-                    statusEl.style.color = "#16a34a";
-                    statusEl.innerText = t('statusSuccess', {added: result.added});
+                const dynamicReportDetails = document.getElementById('ratings-report-details');
+                if (dynamicReportDetails) {
+                    dynamicReportDetails.classList.remove('hidden');
+                    dynamicReportDetails.open = true;
                 }
-
-                if (notFoundCount > 0) {
-                    statusEl.style.color = "#dc2626";
-                    statusEl.innerText += t('statusNotFoundWarning', {count: notFoundCount});
-                }
-
-                reportDetails.classList.remove('hidden');
-                fileInput.value = "";
+                if (fileInput) fileInput.value = "";
             } catch (err) {
-                statusEl.style.color = "#dc2626";
-                statusEl.innerText = `❌ Error: ${err.message}`;
-            } finally {
-                btnImport.disabled = false;
-                btnCancel.classList.add('hidden');
+                updateUiImportState(false);
+                const errorStatusEl = document.getElementById('ratings-status');
+                if (errorStatusEl) {
+                    errorStatusEl.style.color = "#dc2626";
+                    errorStatusEl.innerText = `❌ Error: ${err.message}`;
+                }
+                const fileSelector = document.getElementById('ratings-file-selector');
+                const fileDetails = document.getElementById('ratings-file-details');
+                if (fileSelector) fileSelector.classList.remove('hidden');
+                if (fileDetails) fileDetails.classList.add('hidden');
             }
         };
         reader.readAsText(file);
-    });
+    };
 }
