@@ -1,5 +1,6 @@
 import { CONFIG } from './config.js';
 import { initDeviceFlow, startPolling } from './oauth.js';
+import { ImportStatus } from './constants.js';
 
 function getHeaders() {
     return {
@@ -53,129 +54,133 @@ async function sendSyncBatch(endpoint, payload) {
 /**
  * Importateur sécurisé en deux passes : Historique puis Notes.
  */
-export async function importRatings(allEpisodes, onProgress, getIsAborted) {
-    const chunkSize = 100;
+export async function importRatings(flatEpisodes, onProgress, getIsAborted) {
+    // 1. On ne traite UNIQUEMENT que les épisodes au statut 'pending' et non ignorés
+    const episodesToSync = flatEpisodes.filter(ep => ep.status === ImportStatus.PENDING && !ep.ignore);
+
+    const totalToSync = episodesToSync.length;
+    if (totalToSync === 0) {
+        return { addedHistory: 0, addedRatings: 0, updatedEpisodes: flatEpisodes, aborted: false };
+    }
+
+    // Répartition théorique initiale
+    const episodesToHistory = episodesToSync.filter(ep => ep.watchedAt !== null);
+    const episodesToRate = episodesToSync.filter(ep => ep.rating !== null);
+
     let totalAddedHistory = 0;
     let totalAddedRatings = 0;
+    const chunkSize = 100;
 
-    // --- PHASE 0 : TRAITEMENT INITIAL ET FILTRAGE DES INCOHÉRENCES ---
-    allEpisodes.forEach(ep => {
-        if (ep.rating && !ep.watchedAt) {
-            ep.status = 'incoherent';
-        } else if (ep.watchedAt) {
-            ep.status = 'pending';
-        } else {
-            ep.status = 'unrated';
+    const getEpisodeIdsPayload = (item) => {
+        if (item.imdbId && item.imdbId !== "-1" && item.imdbId.trim() !== "") {
+            return { imdb: item.imdbId.trim() };
         }
-    });
+        return item.tvdbId ? { tvdb: item.tvdbId } : null;
+    };
 
-    const episodesToHistory = allEpisodes.filter(ep => ep.status === 'pending' && ep.tvdbId);
+    // --- PHASE 1 : ENVOI DE L'HISTORIQUE ---
     const totalHistory = episodesToHistory.length;
-
-    // --- PHASE 1 : ENVOI DE L'HISTORIQUE (WATCH HISTORY) ---
     for (let i = 0; i < totalHistory; i += chunkSize) {
         if (getIsAborted && getIsAborted()) {
-            return { 
-                addedHistory: totalAddedHistory, 
-                addedRatings: totalAddedRatings, 
-                updatedEpisodes: allEpisodes, 
-                aborted: true 
-            };
+            return { addedHistory: totalAddedHistory, addedRatings: totalAddedRatings, updatedEpisodes: flatEpisodes, aborted: true };
         }
 
         const chunk = episodesToHistory.slice(i, i + chunkSize);
         
         const historyPayload = {
-            episodes: chunk.map(item => ({
-                watched_at: item.watchedAt,
-                ids: { tvdb: item.tvdbId }
-            }))
+            episodes: chunk.map(item => {
+                const ids = getEpisodeIdsPayload(item);
+                return ids ? { watched_at: item.watchedAt, ids } : null;
+            }).filter(Boolean)
         };
 
         if (onProgress) onProgress(i, totalHistory, 'history');
 
-        const responseData = await sendSyncBatch('history', historyPayload);
-        
-        // Extraction des IDs refusés/inconnus par Trakt dans ce lot
-        const missingIds = new Set(
-            responseData.not_found?.episodes?.map(ep => String(ep.ids.tvdb)) || []
-        );
+        if (historyPayload.episodes.length > 0) {
+            const responseData = await sendSyncBatch('history', historyPayload);
+            
+            const missingImdb = new Set(responseData.not_found?.episodes?.map(ep => ep.ids.imdb).filter(Boolean) || []);
+            const missingTvdb = new Set(responseData.not_found?.episodes?.map(ep => String(ep.ids.tvdb)).filter(Boolean) || []);
 
-        // 🛠 CORRECTION COHÉRENCE : On compte tous les épisodes envoyés qui n'ont pas échoué (not_found)
-        const successfulInChunk = chunk.filter(item => !missingIds.has(String(item.tvdbId))).length;
-        totalAddedHistory += successfulInChunk;
+            const successfulInChunk = chunk.filter(item => {
+                const usesImdb = item.imdbId && item.imdbId !== "-1";
+                return usesImdb ? !missingImdb.has(item.imdbId) : !missingTvdb.has(String(item.tvdbId));
+            }).length;
 
-        chunk.forEach(item => {
-            if (missingIds.has(String(item.tvdbId))) {
-                item.status = 'not_found';
-            } else {
-                item.status = 'history_synced';
-            }
-        });
+            totalAddedHistory += successfulInChunk;
+
+            chunk.forEach(item => {
+                const usesImdb = item.imdbId && item.imdbId !== "-1";
+                const isMissing = usesImdb ? missingImdb.has(item.imdbId) : missingTvdb.has(String(item.tvdbId));
+                
+                if (isMissing) {
+                    item.status = ImportStatus.NOT_FOUND;
+                    if (item._ref) item._ref.status = ImportStatus.NOT_FOUND;
+                } else {
+                    // 💡 VOTRE LOGIQUE : 
+                    // S'il y a une note à envoyer après, on le laisse en PENDING.
+                    // Sinon, le travail est fini -> SUCCESS !
+                    const needsRating = item.rating !== null;
+                    const nextStatus = needsRating ? ImportStatus.PENDING : ImportStatus.SUCCESS;
+                    
+                    item.status = nextStatus;
+                    if (item._ref) item._ref.status = nextStatus;
+                }
+            });
+        }
     }
 
-    if (onProgress) onProgress(totalHistory, totalHistory, 'history');
-
-    const episodesToRate = allEpisodes.filter(ep => ep.status === 'history_synced' && ep.rating);
-    const totalRatings = episodesToRate.length;
-
-    // --- PHASE 2 : ENVOI DES NOTES (RATINGS) ---
+    // --- PHASE 2 : ENVOI DES NOTES ---
+    // 💡 FILTRE DE SÉCURITÉ : On ne traite que ceux qui sont toujours PENDING 
+    // (on élimine ceux qui ont échoué en Phase 1 et sont passés en NOT_FOUND)
+    const activeEpisodesToRate = episodesToRate.filter(ep => ep.status === ImportStatus.PENDING);
+    const totalRatings = activeEpisodesToRate.length;
+    
     for (let i = 0; i < totalRatings; i += chunkSize) {
         if (getIsAborted && getIsAborted()) {
-            allEpisodes.forEach(ep => { if (ep.status === 'history_synced') ep.status = 'pending'; });
-            return { 
-                addedHistory: totalAddedHistory, 
-                addedRatings: totalAddedRatings, 
-                updatedEpisodes: allEpisodes, 
-                aborted: true 
-            };
+            return { addedHistory: totalAddedHistory, addedRatings: totalAddedRatings, updatedEpisodes: flatEpisodes, aborted: true };
         }
 
-        const chunk = episodesToRate.slice(i, i + chunkSize);
+        const chunk = activeEpisodesToRate.slice(i, i + chunkSize);
 
         const ratingsPayload = {
-            episodes: chunk.map(item => ({
-                rating: item.rating,
-                rated_at: item.watchedAt,
-                ids: { tvdb: item.tvdbId }
-            }))
+            episodes: chunk.map(item => {
+                const ids = getEpisodeIdsPayload(item);
+                return ids ? { rating: item.rating, rated_at: item.watchedAt, ids } : null;
+            }).filter(Boolean)
         };
 
         if (onProgress) onProgress(i, totalRatings, 'ratings');
 
-        const responseData = await sendSyncBatch('ratings', ratingsPayload);
+        if (ratingsPayload.episodes.length > 0) {
+            const responseData = await sendSyncBatch('ratings', ratingsPayload);
 
-        const missingIds = new Set(
-            responseData.not_found?.episodes?.map(ep => String(ep.ids.tvdb)) || []
-        );
+            const missingImdb = new Set(responseData.not_found?.episodes?.map(ep => ep.ids.imdb).filter(Boolean) || []);
+            const missingTvdb = new Set(responseData.not_found?.episodes?.map(ep => String(ep.ids.tvdb)).filter(Boolean) || []);
 
-        // 🛠 CORRECTION COHÉRENCE : Même logique pour les notes
-        const successfulInChunk = chunk.filter(item => !missingIds.has(String(item.tvdbId))).length;
-        totalAddedRatings += successfulInChunk;
+            const successfulInChunk = chunk.filter(item => {
+                const usesImdb = item.imdbId && item.imdbId !== "-1";
+                return usesImdb ? !missingImdb.has(item.imdbId) : !missingTvdb.has(String(item.tvdbId));
+            }).length;
 
-        chunk.forEach(item => {
-            if (missingIds.has(String(item.tvdbId))) {
-                item.status = 'not_found';
-            } else {
-                item.status = 'success';
-            }
-        });
+            totalAddedRatings += successfulInChunk;
+
+            chunk.forEach(item => {
+                const usesImdb = item.imdbId && item.imdbId !== "-1";
+                const isMissing = usesImdb ? missingImdb.has(item.imdbId) : missingTvdb.has(String(item.tvdbId));
+
+                const newStatus = isMissing ? ImportStatus.NOT_FOUND : ImportStatus.SUCCESS;
+                item.status = newStatus;
+                if (item._ref) item._ref.status = newStatus;
+            });
+        }
     }
 
-    if (onProgress) onProgress(totalRatings, totalRatings, 'ratings');
-
-    // Nettoyage final pour les épisodes vus mais sans note
-    allEpisodes.forEach(ep => {
-        if (ep.status === 'history_synced') {
-            ep.status = 'success'; 
-        }
-    });
-
-    return { 
-        addedHistory: totalAddedHistory, 
-        addedRatings: totalAddedRatings, 
-        updatedEpisodes: allEpisodes, 
-        aborted: false 
+    return {
+        addedHistory: totalAddedHistory,
+        addedRatings: totalAddedRatings,
+        updatedEpisodes: flatEpisodes,
+        aborted: false
     };
 }
 

@@ -78,14 +78,14 @@ async function loadHistory() {
                     setTimeout(loadHistory, 1500);
                 } catch (err) {
                     globalStatusEl.style.color = "#dc2626";
-                    globalStatusEl.innerText = `❌ Error: ${err.message}`;
+                    globalStatusEl.innerText = `❌ ${t('errorPrefix')} ${err.message}`;
                     e.target.disabled = false;
                     e.target.innerText = t('btnUpdate');
                 }
             });
         });
     } catch (err) {
-        historyBody.innerHTML = `<tr><td colspan="6" style="color:#dc2626">Error: ${err.message}</td></tr>`;
+        historyBody.innerHTML = `<tr><td colspan="6" style="color:#dc2626">${t('errorPrefix')} ${err.message}</td></tr>`;
     }
 }
 

@@ -51,7 +51,7 @@ export function setupAuthListeners() {
                 statusEl.innerText = t('linking');
             },
             () => { syncUiState(); },
-            (err) => { alert("Error: " + err.message); syncUiState(); }
+            (err) => { alert(t('errorPrefix') + " " + err.message); syncUiState(); }
         );
     });
 

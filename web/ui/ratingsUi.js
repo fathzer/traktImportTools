@@ -1,8 +1,10 @@
 import { parseTvTimeRatings } from '../tvTimeLiberator.js';
 import { importRatings } from '../traktApi.js';
+import { ImportStatus } from '../constants.js';
 import { t } from './i18n.js';
 
-let localEpisodesStore = [];
+let localEpisodesStore = []; // Liste plate
+let localTreeStore = [];      // Structure arborescente (Séries -> Saisons -> Épisodes)
 let isImportAborted = false;
 let isImportRunning = false;
 
@@ -10,19 +12,27 @@ let currentProgressCount = 0;
 let totalProgressCount = 0;
 
 const STORAGE_EPISODES_KEY = 'trakt_import_episodes';
+const STORAGE_TREE_KEY = 'trakt_import_tree';
 const STORAGE_FILE_NAME_KEY = 'trakt_import_file_name';
 const STORAGE_ADDED_HISTORY_KEY = 'trakt_import_added_history';
 const STORAGE_ADDED_RATINGS_KEY = 'trakt_import_added_ratings';
 
 export function renderRatingsUi() {
+    // Restauration depuis le localStorage au chargement
     if (localEpisodesStore.length === 0) {
         const storedEpisodes = localStorage.getItem(STORAGE_EPISODES_KEY);
-        if (storedEpisodes) {
+        const storedTree = localStorage.getItem(STORAGE_TREE_KEY);
+        if (storedEpisodes && storedTree) {
             try {
                 localEpisodesStore = JSON.parse(storedEpisodes);
+                localTreeStore = JSON.parse(storedTree);
+                
+                // Recréer les liens de référence mémoire après désérialisation
+                relinkFlatToTree();
             } catch (e) {
-                console.error("Erreur lors de la lecture des épisodes persistés :", e);
+                console.error("Erreur lors de la lecture des données persistées :", e);
                 localEpisodesStore = [];
+                localTreeStore = [];
             }
         }
     }
@@ -76,6 +86,7 @@ export function renderRatingsUi() {
                                 <tr style="position: sticky; top: 0; background: #f3f4f6; z-index: 1;">
                                     <th style="padding: 10px; text-align: left; border-bottom: 1px solid #e5e7eb;">${t('thShow')}</th>
                                     <th style="padding: 10px; text-align: left; border-bottom: 1px solid #e5e7eb;">${t('thEpisode')}</th>
+                                    <th style="padding: 10px; text-align: center; border-bottom: 1px solid #e5e7eb;">${t('thSpecial')}</th>
                                     <th style="padding: 10px; text-align: left; border-bottom: 1px solid #e5e7eb;">${t('thTvdb')}</th>
                                     <th style="padding: 10px; text-align: left; border-bottom: 1px solid #e5e7eb;">${t('thWatchedAt')}</th>
                                     <th style="padding: 10px; text-align: center; border-bottom: 1px solid #e5e7eb;">${t('thRating')}</th>
@@ -86,7 +97,7 @@ export function renderRatingsUi() {
                     </div>
                 </div>
 
-                <div style="margin-top: 15px;">
+                <div style="margin-top: 15px; margin-bottom: 25px;">
                     <h4 style="margin: 0 0 10px 0; color: #dc2626; display: flex; align-items: center; justify-content: space-between; font-size: 14px;">
                         <span>${t('titleFailures')}</span>
                         <span id="cnt-failure" style="background: #fee2e2; color: #dc2626; padding: 2px 8px; border-radius: 12px; font-size: 12px; font-weight: bold;">0</span>
@@ -95,9 +106,12 @@ export function renderRatingsUi() {
                         <table style="font-size: 13px; margin-top: 0; width: 100%; border-collapse: collapse;">
                             <thead>
                                 <tr style="position: sticky; top: 0; background: #f3f4f6; z-index: 1;">
+                                    <th style="padding: 10px; text-align: center; border-bottom: 1px solid #e5e7eb;">${t('thIgnore')}</th>
                                     <th style="padding: 10px; text-align: left; border-bottom: 1px solid #e5e7eb;">${t('thShow')}</th>
                                     <th style="padding: 10px; text-align: left; border-bottom: 1px solid #e5e7eb;">${t('thEpisode')}</th>
+                                    <th style="padding: 10px; text-align: center; border-bottom: 1px solid #e5e7eb;">${t('thSpecial')}</th>
                                     <th style="padding: 10px; text-align: left; border-bottom: 1px solid #e5e7eb;">${t('thTvdb')}</th>
+                                    <th style="padding: 10px; text-align: left; border-bottom: 1px solid #e5e7eb; width: 130px;">${t('thImdb') || 'ID IMDb'}</th>
                                     <th style="padding: 10px; text-align: left; border-bottom: 1px solid #e5e7eb;">${t('thWatchedAt')}</th>
                                     <th style="padding: 10px; text-align: center; border-bottom: 1px solid #e5e7eb;">${t('thRating')}</th>
                                     <th style="padding: 10px; text-align: left; border-bottom: 1px solid #e5e7eb;">${t('thStatus')}</th>
@@ -106,6 +120,18 @@ export function renderRatingsUi() {
                             <tbody id="ratings-failure-body"></tbody>
                         </table>
                     </div>
+                </div>
+
+                <div id="correction-actions" style="margin-top: 20px; display: flex; gap: 10px; flex-wrap: wrap;">
+                    <button id="btn-save-corrections" class="action-btn" style="background-color: #10b981;">
+                        ${t('btnSaveStore') || '💾 Enregistrer les corrections'}
+                    </button>
+                    <button id="btn-retry-corrections" class="action-btn" style="background-color: #3b82f6;">
+                        ${t('btnRetrySync') || '🔄 Synchroniser les corrections'}
+                    </button>
+                    <button id="btn-download-json" class="secondary" style="border-color: #6b7280; color: #374151;">
+                        ${t('btnDownloadJson') || '📥 Exporter le fichier corrigé'}
+                    </button>
                 </div>
             </details>
         </div>
@@ -124,17 +150,39 @@ export function renderRatingsUi() {
     }
 }
 
+/**
+ * Recrée le chaînage d'objets (_ref) entre la liste plate et la structure arborescente.
+ */
+function relinkFlatToTree() {
+    const treeMap = {};
+    localTreeStore.forEach(show => {
+        treeMap[show.title] = show;
+    });
+
+    localEpisodesStore.forEach(ep => {
+        const show = treeMap[ep.showTitle];
+        if (show) {
+            const season = show.seasons.find(s => s.number === ep.seasonNumber);
+            if (season) {
+                const episodeNode = season.episodes.find(e => e.number === ep.episodeNumber);
+                if (episodeNode) {
+                    ep._ref = episodeNode;
+                }
+            }
+        }
+    });
+}
+
 function restoreSummaryMessage() {
     const statusEl = document.getElementById('ratings-status');
     if (!statusEl || localEpisodesStore.length === 0) return;
 
-    // Récupération des décomptes de synchronisation réels persistés
     const addedHistory = parseInt(localStorage.getItem(STORAGE_ADDED_HISTORY_KEY) || "0", 10);
     const addedRatings = parseInt(localStorage.getItem(STORAGE_ADDED_RATINGS_KEY) || "0", 10);
 
-    const pendings = localEpisodesStore.filter(ep => ep.status === 'pending');
-    const notFounds = localEpisodesStore.filter(ep => ep.status === 'not_found');
-    const incoherents = localEpisodesStore.filter(ep => ep.status === 'incoherent');
+    const pendings = localEpisodesStore.filter(ep => ep.status === ImportStatus.PENDING);
+    const notFounds = localEpisodesStore.filter(ep => ep.status === ImportStatus.NOT_FOUND);
+    const incoherents = localEpisodesStore.filter(ep => ep.status === ImportStatus.INCONSISTENT);
 
     if (isImportRunning) return;
 
@@ -153,7 +201,7 @@ function restoreSummaryMessage() {
     
     if (incoherents.length > 0) {
         statusEl.style.color = "#dc2626";
-        statusEl.innerText += ` ⚠️ ${incoherents.length} épisode(s) rejeté(s) car noté(s) mais sans historique de visionnage.`;
+        statusEl.innerText += t('inconsistentWarning', { count: incoherents.length });
     }
 }
 
@@ -174,18 +222,33 @@ function renderReportTables() {
     successBody.innerHTML = '';
     failureBody.innerHTML = '';
 
-    const successes = localEpisodesStore.filter(ep => ep.status === 'success');
-    const failures = localEpisodesStore.filter(ep => ep.status === 'not_found' || ep.status === 'pending' || ep.status === 'incoherent');
+    // Filtrage propre basé strictement sur l'énumération ImportStatus
+    const successes = localEpisodesStore.filter(ep => ep.status === ImportStatus.SUCCESS);
+    const failures = localEpisodesStore.filter(ep => 
+        ep.status === ImportStatus.NOT_FOUND || 
+        ep.status === ImportStatus.PENDING || 
+        ep.status === ImportStatus.INCONSISTENT
+    );
 
     if (successes.length === 0) {
-        successBody.innerHTML = `<tr><td colspan="5" class="loading-stub" style="text-align:center; padding: 20px;">${t('noMatch')}</td></tr>`;
+        successBody.innerHTML = `<tr><td colspan="6" class="loading-stub" style="text-align:center; padding: 20px;">${t('noMatch')}</td></tr>`;
     } else {
         successes.forEach(ep => {
             const tr = document.createElement('tr');
+            
+            // 🛠 AFFICHAGE DE L'ID : Priorité à l'ID IMDb avec mention s'il est présent
+            let displayId = "";
+            if (ep.imdbId && ep.imdbId !== "-1" && ep.imdbId.trim() !== "") {
+                displayId = `<code>${ep.imdbId}</code> <span style="font-size: 11px; color: #6b7280; font-weight: 600;">(imdb)</span>`;
+            } else {
+                displayId = `<code>${ep.tvdbId || 'N/A'}</code>`;
+            }
+
             tr.innerHTML = `
                 <td style="padding: 10px; border-bottom: 1px solid #e5e7eb;"><strong>${ep.showTitle}</strong></td>
                 <td style="padding: 10px; border-bottom: 1px solid #e5e7eb; white-space: nowrap;">S${String(ep.seasonNumber).padStart(2, '0')}E${String(ep.episodeNumber).padStart(2, '0')}</td>
-                <td style="padding: 10px; border-bottom: 1px solid #e5e7eb;"><code>${ep.tvdbId || 'N/A'}</code></td>
+                <td style="padding: 10px; border-bottom: 1px solid #e5e7eb; text-align: center;"><input type="checkbox" ${ep.special ? 'checked' : ''} disabled style="cursor: default;"></td>
+                <td style="padding: 10px; border-bottom: 1px solid #e5e7eb;">${displayId}</td>
                 <td style="padding: 10px; border-bottom: 1px solid #e5e7eb; white-space: nowrap;">${ep.watchedAt ? String(ep.watchedAt).split('T')[0] : '-'}</td>
                 <td style="padding: 10px; border-bottom: 1px solid #e5e7eb; text-align:center">${ep.originalRating || '-'} / 10</td>
             `;
@@ -194,24 +257,96 @@ function renderReportTables() {
     }
 
     if (failures.length === 0) {
-        failureBody.innerHTML = `<tr><td colspan="6" class="loading-stub" style="text-align:center; padding: 20px;">${t('noMatch')}</td></tr>`;
+        failureBody.innerHTML = `<tr><td colspan="9" class="loading-stub" style="text-align:center; padding: 20px;">${t('noMatch')}</td></tr>`;
     } else {
-        failures.forEach(ep => {
+        failures.forEach((ep, index) => {
             const tr = document.createElement('tr');
             
             let statusBadge = t('badgeNotFound');
-            if (ep.status === 'pending') statusBadge = t('badgeAborted');
-            if (ep.status === 'incoherent') statusBadge = t('badgeIncoherent') || '❌ Incohérent';
+            if (ep.status === ImportStatus.PENDING) statusBadge = t('badgeAborted');
+            if (ep.status === ImportStatus.INCONSISTENT) statusBadge = t('badgeIncoherent') || '❌ Incohérent';
+
+            let imdbMarkup = '';
+            if (ep.status === ImportStatus.INCONSISTENT) {
+                imdbMarkup = `<span style="color: #9ca3af; font-style: italic;">N/A</span>`;
+            } else {
+                imdbMarkup = `
+                    <input type="text" 
+                           class="imdb-edit-input" 
+                           data-index="${index}" 
+                           value="${ep.imdbId || ''}" 
+                           placeholder="tt1234567" 
+                           style="width: 110px; padding: 4px 6px; font-size: 12px; border: 1px solid #cbd5e1; border-radius: 4px; font-family: monospace;">
+                `;
+            }
+
+            const isInconsistent = ep.status === ImportStatus.INCONSISTENT;
+            let ignoreChecked;
+            if (isInconsistent) {
+                ignoreChecked = 'checked';
+            } else {
+                ignoreChecked = ep.ignore ? 'checked' : '';
+            }
+            const ignoreDisabled = isInconsistent ? 'disabled' : '';
 
             tr.innerHTML = `
+                <td style="padding: 10px; border-bottom: 1px solid #e5e7eb; text-align: center;"><input type="checkbox" class="ignore-checkbox" data-index="${index}" ${ignoreChecked} ${ignoreDisabled} style="cursor: ${isInconsistent ? 'default' : 'pointer'};"></td>
                 <td style="padding: 10px; border-bottom: 1px solid #e5e7eb;"><strong>${ep.showTitle}</strong></td>
                 <td style="padding: 10px; border-bottom: 1px solid #e5e7eb; white-space: nowrap;">S${String(ep.seasonNumber).padStart(2, '0')}E${String(ep.episodeNumber).padStart(2, '0')}</td>
+                <td style="padding: 10px; border-bottom: 1px solid #e5e7eb; text-align: center;"><input type="checkbox" ${ep.special ? 'checked' : ''} disabled style="cursor: default;"></td>
                 <td style="padding: 10px; border-bottom: 1px solid #e5e7eb;"><code>${ep.tvdbId || 'N/A'}</code></td>
+                <td style="padding: 10px; border-bottom: 1px solid #e5e7eb;">${imdbMarkup}</td>
                 <td style="padding: 10px; border-bottom: 1px solid #e5e7eb; white-space: nowrap;">${ep.watchedAt ? String(ep.watchedAt).split('T')[0] : '-'}</td>
                 <td style="padding: 10px; border-bottom: 1px solid #e5e7eb; text-align:center">${ep.originalRating || '-'} / 10</td>
                 <td style="padding: 10px; border-bottom: 1px solid #e5e7eb;">${statusBadge}</td>
             `;
             failureBody.appendChild(tr);
+        });
+
+        // Liaison des saisies IMDb en cascade vers la structure arborescente (par référence)
+        document.querySelectorAll('.imdb-edit-input').forEach(input => {
+            input.oninput = (e) => {
+                const failureIndex = parseInt(e.target.getAttribute('data-index'), 10);
+                // On utilise le même filtre cohérent ici pour cibler le bon élément du tableau
+                const targetFailures = localEpisodesStore.filter(ep => 
+                    ep.status === ImportStatus.NOT_FOUND || 
+                    ep.status === ImportStatus.PENDING || 
+                    ep.status === ImportStatus.INCONSISTENT
+                );
+                const targetEpisode = targetFailures[failureIndex];
+                
+                if (targetEpisode) {
+                    const cleanValue = e.target.value.trim() || null;
+                    targetEpisode.imdbId = cleanValue;
+                    
+                    // Mise à jour automatique de la structure arborescente liée par référence
+                    if (targetEpisode._ref) {
+                        targetEpisode._ref.id.imdb = cleanValue;
+                    }
+                }
+            };
+        });
+
+        // Liaison des cases à cocher Ignorer vers la structure de données
+        document.querySelectorAll('.ignore-checkbox').forEach(checkbox => {
+            checkbox.onchange = (e) => {
+                const failureIndex = parseInt(e.target.getAttribute('data-index'), 10);
+                const targetFailures = localEpisodesStore.filter(ep => 
+                    ep.status === ImportStatus.NOT_FOUND || 
+                    ep.status === ImportStatus.PENDING || 
+                    ep.status === ImportStatus.INCONSISTENT
+                );
+                const targetEpisode = targetFailures[failureIndex];
+                
+                if (targetEpisode && targetEpisode.status !== ImportStatus.INCONSISTENT) {
+                    targetEpisode.ignore = e.target.checked;
+                    
+                    // Mise à jour automatique de la structure arborescente liée par référence
+                    if (targetEpisode._ref) {
+                        targetEpisode._ref.ignore = e.target.checked;
+                    }
+                }
+            };
         });
     }
 }
@@ -221,8 +356,8 @@ function updateReportCounters() {
     const failureCountEl = document.getElementById('cnt-failure');
     if (!successCountEl || !failureCountEl) return;
 
-    const successes = localEpisodesStore.filter(ep => ep.status === 'success');
-    const failures = localEpisodesStore.filter(ep => ep.status === 'not_found' || ep.status === 'pending' || ep.status === 'incoherent');
+    const successes = localEpisodesStore.filter(ep => ep.status === ImportStatus.SUCCESS);
+    const failures = localEpisodesStore.filter(ep => ep.status === ImportStatus.NOT_FOUND || ep.status === ImportStatus.PENDING || ep.status === ImportStatus.INCONSISTENT);
 
     successCountEl.innerText = successes.length;
     failureCountEl.innerText = failures.length;
@@ -265,6 +400,10 @@ export function setupRatingsListeners() {
     const btnReset = document.getElementById('btn-reset-ratings');
     const fileInput = document.getElementById('ratings-file');
 
+    const btnSave = document.getElementById('btn-save-corrections');
+    const btnDownload = document.getElementById('btn-download-json');
+    const btnRetry = document.getElementById('btn-retry-corrections');
+
     if (fileInput && btnImport) {
         fileInput.onchange = () => {
             if (fileInput.files && fileInput.files.length > 0) {
@@ -286,12 +425,14 @@ export function setupRatingsListeners() {
     if (btnReset) {
         btnReset.onclick = () => {
             localEpisodesStore = [];
+            localTreeStore = [];
             isImportAborted = false;
             isImportRunning = false;
             currentProgressCount = 0;
             totalProgressCount = 0;
             
             localStorage.removeItem(STORAGE_EPISODES_KEY);
+            localStorage.removeItem(STORAGE_TREE_KEY);
             localStorage.removeItem(STORAGE_FILE_NAME_KEY);
             localStorage.removeItem(STORAGE_ADDED_HISTORY_KEY);
             localStorage.removeItem(STORAGE_ADDED_RATINGS_KEY);
@@ -307,7 +448,81 @@ export function setupRatingsListeners() {
         };
     }
 
-    if (!btnImport) return;
+    // BOUTON 1 : Enregistrement de l'état actuel (Arbre + Plat)
+    if (btnSave) {
+        btnSave.onclick = () => {
+            localStorage.setItem(STORAGE_EPISODES_KEY, JSON.stringify(localEpisodesStore));
+            localStorage.setItem(STORAGE_TREE_KEY, JSON.stringify(localTreeStore));
+            const statusEl = document.getElementById('ratings-status');
+            if (statusEl) {
+                statusEl.style.color = "#10b981";
+                statusEl.innerText = t('statusSaved') || "💾 Modifications enregistrées localement !";
+                setTimeout(restoreSummaryMessage, 2000);
+            }
+        };
+    }
+
+    // BOUTON 2 : Exporter l'état d'importation arborescent et enrichi
+    if (btnDownload) {
+        btnDownload.onclick = () => {
+            // On télécharge la structure arborescente enrichie
+            const blob = new Blob([JSON.stringify(localTreeStore, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            
+            const a = document.createElement('a');
+            const sourceName = localStorage.getItem(STORAGE_FILE_NAME_KEY) || 'shows-corrected.json';
+            a.href = url;
+            a.download = sourceName.replace('.json', '-state.json');
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        };
+    }
+
+    // BOUTON 3 : Retry (En attente d'implémentation de l'import/recherche auto)
+    if (btnRetry) {
+        btnRetry.onclick = async () => {
+            const failures = localEpisodesStore.filter(ep => ep.status === ImportStatus.NOT_FOUND || ep.status === ImportStatus.INCONSISTENT);
+
+            if (failures.length === 0) {
+                alert(t('noErrorToSyncAlert'));
+                return;
+            }
+
+            // Préparation : on repasse les échecs en "pending" pour qu'ils soient traités
+            failures.forEach(ep => {
+                ep.status = ImportStatus.PENDING;
+                if (ep._ref) ep._ref.status = ImportStatus.PENDING;
+            });
+
+            updateUiImportState(true);
+            isImportAborted = false;
+
+            try {
+                // Appel unique (même fonction !)
+                const result = await importRatings(
+                    localEpisodesStore,
+                    (current, total, step) => updateProgressUi(current, total, step),
+                    () => isImportAborted
+                );
+
+                // Finalisation commune (en mode cumul : isIncremental = true)
+                finalizeImportState(result, true);
+
+                const statusEl = document.getElementById('ratings-status');
+                if (statusEl) {
+                    statusEl.style.color = "#16a34a";
+                    statusEl.innerText = t('correctionsSynced', { history: result.addedHistory, ratings: result.addedRatings });
+                    setTimeout(restoreSummaryMessage, 5000);
+                }
+            } catch (err) {
+                // ... gestion erreur ...
+            }
+        };
+    }
+
+    if (!fileInput || !btnImport) return;
 
     btnImport.onclick = () => {
         const file = fileInput.files[0];
@@ -316,7 +531,7 @@ export function setupRatingsListeners() {
         updateUiImportState(true);
         
         const activeFileNameEl = document.getElementById('ratings-active-filename');
-        if (activeFileNameEl) activeFileNameEl.innerText = `📄 ${t('fileImported') || 'Fichier importé'} : ${file.name}`;
+        if (activeFileNameEl) activeFileNameEl.innerText = `📄 ${t('fileImported')} : ${file.name}`;
         localStorage.setItem(STORAGE_FILE_NAME_KEY, file.name);
 
         const reportDetails = document.getElementById('ratings-report-details');
@@ -336,37 +551,25 @@ export function setupRatingsListeners() {
                 if (dynamicStatusEl) dynamicStatusEl.innerText = t('statusParsing');
                 
                 const rawJson = JSON.parse(e.target.result);
-                localEpisodesStore = parseTvTimeRatings(rawJson);
-                localStorage.setItem(STORAGE_EPISODES_KEY, JSON.stringify(localEpisodesStore));
+                
+                // Parsing et détection du format
+                if (Array.isArray(rawJson) && rawJson.length > 0 && rawJson[0].hasOwnProperty('seasons')) {
+                    const parsed = parseTvTimeRatings(rawJson);
+                    localTreeStore = parsed.tree;
+                    localEpisodesStore = parsed.flat;
+                }
 
                 if (dynamicStatusEl) dynamicStatusEl.innerText = t('statusSyncing');
                 
+                // Appel unique
                 const result = await importRatings(
                     localEpisodesStore, 
-                    (current, total, step) => {
-                        currentProgressCount = current;
-                        totalProgressCount = total;
-                        const progressStatusEl = document.getElementById('ratings-status');
-                        if (progressStatusEl) {
-                            const stepLabel = step === 'history' ? t('statusSyncHistory') : t('statusSyncRatings');
-                            progressStatusEl.innerText = `${stepLabel} (${current}/${total})`;
-                        }
-                    },
+                    (current, total, step) => updateProgressUi(current, total, step),
                     () => isImportAborted
                 );
 
-                localEpisodesStore = result.updatedEpisodes;
-                localStorage.setItem(STORAGE_EPISODES_KEY, JSON.stringify(localEpisodesStore));
-                
-                // Persistance des compteurs détaillés de cette session d'import
-                localStorage.setItem(STORAGE_ADDED_HISTORY_KEY, result.addedHistory.toString());
-                localStorage.setItem(STORAGE_ADDED_RATINGS_KEY, result.addedRatings.toString());
-
-                updateUiImportState(false);
-                
-                updateReportCounters();
-                renderReportTables();
-                restoreSummaryMessage();
+                // Finalisation commune (en mode écrasement : isIncremental = false)
+                finalizeImportState(result, false);
 
                 const dynamicReportDetails = document.getElementById('ratings-report-details');
                 if (dynamicReportDetails) {
@@ -374,19 +577,75 @@ export function setupRatingsListeners() {
                     dynamicReportDetails.open = true;
                 }
                 if (fileInput) fileInput.value = "";
-            } catch (err) {
+           } catch (err) {
                 updateUiImportState(false);
                 const errorStatusEl = document.getElementById('ratings-status');
                 if (errorStatusEl) {
                     errorStatusEl.style.color = "#dc2626";
-                    errorStatusEl.innerText = `❌ Error: ${err.message}`;
+                    errorStatusEl.innerText = `❌ ${t('errorPrefix')} ${err.message}`;
                 }
-                const fileSelector = document.getElementById('ratings-file-selector');
-                const fileDetails = document.getElementById('ratings-file-details');
-                if (fileSelector) fileSelector.classList.remove('hidden');
-                if (fileDetails) fileDetails.classList.add('hidden');
             }
         };
         reader.readAsText(file);
     };
+}
+
+/**
+ * Centralise la sauvegarde des données, le calcul des compteurs et le rafraîchissement complet de l'IHM
+ * @param {Object} result - Le résultat retourné par importRatings
+ * @param {boolean} isIncremental - Si vrai, on ajoute les scores aux compteurs existants (cas du Retry). Sinon, on écrase (cas de l'Import initial).
+ */
+function finalizeImportState(result, isIncremental = false) {
+    localEpisodesStore = result.updatedEpisodes;
+
+    // 1. Sauvegarde des structures en local
+    localStorage.setItem(STORAGE_EPISODES_KEY, JSON.stringify(localEpisodesStore));
+    localStorage.setItem(STORAGE_TREE_KEY, JSON.stringify(localTreeStore));
+
+    // 2. Gestion propre des compteurs Trakt
+    if (isIncremental) {
+        const prevHistory = parseInt(localStorage.getItem(STORAGE_ADDED_HISTORY_KEY) || "0", 10);
+        const prevRatings = parseInt(localStorage.getItem(STORAGE_ADDED_RATINGS_KEY) || "0", 10);
+        localStorage.setItem(STORAGE_ADDED_HISTORY_KEY, (prevHistory + result.addedHistory).toString());
+        localStorage.setItem(STORAGE_ADDED_RATINGS_KEY, (prevRatings + result.addedRatings).toString());
+    } else {
+        localStorage.setItem(STORAGE_ADDED_HISTORY_KEY, result.addedHistory.toString());
+        localStorage.setItem(STORAGE_ADDED_RATINGS_KEY, result.addedRatings.toString());
+    }
+
+    // 3. Extinction de l'état "en cours" de l'IHM
+    updateUiImportState(false);
+    
+    // 4. Rafraîchissement global de la vue
+    updateReportCounters();
+    renderReportTables();
+    restoreSummaryMessage();
+
+    // 5. Ré-attachement des écouteurs sur le DOM fraîchement rendu
+    setupRatingsListeners();
+}
+
+/**
+ * Met à jour l'affichage textuel de la progression de la synchronisation.
+ * @param {number} current - Le nombre d'épisodes traités dans le lot actuel
+ * @param {number} total - Le nombre total d'épisodes à traiter pour cette étape
+ * @param {string} step - L'étape en cours ('history' ou 'ratings')
+ */
+function updateProgressUi(current, total, step) {
+    currentProgressCount = current;
+    totalProgressCount = total;
+    
+    const progressStatusEl = document.getElementById('ratings-status');
+    if (!progressStatusEl) return;
+
+    let stepLabel = "";
+    if (step === 'history') {
+        stepLabel = t('statusSyncHistory') || "🔄 Synchronisation de l'historique";
+    } else if (step === 'ratings') {
+        stepLabel = t('statusSyncRatings') || "🔄 Synchronisation des notes";
+    } else {
+        stepLabel = t('syncInProgress');
+    }
+
+    progressStatusEl.innerText = `${stepLabel} (${current}/${total})`;
 }

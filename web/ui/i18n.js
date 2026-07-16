@@ -3,7 +3,7 @@ const STORAGE_KEY = 'trakt_app_lang';
 const TRANSLATIONS = {
     fr: {
         title: "Trakt & TV Time Integration Fix",
-        introText: "Cette application expérimentale permet de combler les manques des outils de synchronisation officiels. Elle vous permet d'importer l'intégralité de vos notes d'épisodes de séries depuis un export TV Time (obtenu via l'extension Chrome <b>Tv Time Liberator</b>) vers votre compte Trakt, tout en fournissant un rapport détaillé des correspondances. Elle inclut également un module de correction des dates de visionnage de votre historique de films (certains outils d'import ont, un temps, corrompu ces dates).",
+        introText: "Cette application expérimentale permet de combler les manques des outils de synchronisation officiels. Elle vous permet d'importer l'intégralité de vos dates de visionnage et notes d'épisodes de séries depuis un export TV Time (obtenu via l'extension Chrome <b>Tv Time Liberator</b>) vers votre compte Trakt, tout en fournissant un rapport détaillé des correspondances. Elle inclut également un module de correction des dates de visionnage de votre historique de films (certains outils d'import ont, un temps, corrompu ces dates).",
         btnSwitchLang: "🇬🇧 Switch to English",
         sessionStatus: "Statut de la session",
         checking: "Vérification...",
@@ -15,10 +15,11 @@ const TRANSLATIONS = {
         linking: "Liaison en cours...",
         actionRequired: "Action requise",
         instructions: "Ouvrez : {url} et saisissez :",
+        errorPrefix: "Erreur :",
         
         // Section Ratings
-        ratingsTitle: "Importateur de notes d'épisodes TV Time",
-        ratingsDesc: "Sélectionnez votre fichier JSON exporté pour envoyer vos notes d'épisodes vers Trakt (fichier <i>shows.json</i> de l'export TV Time Liberator).",
+        ratingsTitle: "Importateur d'épisodes TV Time",
+        ratingsDesc: "Sélectionnez votre fichier JSON exporté pour envoyer vos dates de visionnage et notes d'épisodes vers Trakt (fichier <i>shows.json</i> de l'export TV Time Liberator).",
         btnImport: "Lancer l'importation",
         btnCancel: "Annuler l'import",
         btnClear: "Effacer les données",
@@ -47,6 +48,9 @@ const TRANSLATIONS = {
         thShow: "Série",
         thEpisode: "Épisode",
         thTvdb: "ID TVDB",
+        thImdb: "ID IMDb",
+        thSpecial: "Spécial",
+        thIgnore: "Ignorer",
         thRating: "Note",
         thStatus: "Statut Synchro",
         badgeUnrated: "🛑 Non noté",
@@ -54,6 +58,15 @@ const TRANSLATIONS = {
         badgeNotFound: "⚠️ Inconnu Trakt",
         badgeAborted: "⏳ Non traité (Annulé)",
         noMatch: "Aucun épisode ne correspond à ce filtre.",
+        btnSaveStore: "💾 Enregistrer les corrections",
+        btnDownloadJson: "📥 Exporter le fichier corrigé",
+        btnRetrySync: "🔄 Synchroniser les corrections",
+        statusSaved: "💾 Modifications enregistrées localement !",
+        inconsistentWarning: " ⚠️ {count} épisode(s) rejeté(s) car noté(s) mais sans historique de visionnage.",
+        noErrorToSyncAlert: "Aucune ligne en erreur à synchroniser !",
+        correctionsSynced: "✅ Corrections synchronisées ! +{history} historique(s), +{ratings} note(s).",
+        fileImported: "Fichier importé",
+        syncInProgress: "🔄 Synchronisation en cours",
 
         // Section Movies
         moviesTitle: "Historique des visionnages ({count})",
@@ -74,7 +87,7 @@ const TRANSLATIONS = {
     },
     en: {
         title: "Trakt & TV Time Integration Fix",
-        introText: "This experimental app fills the gaps left by official synchronization tools. It allows you to import all your TV series episode notes from a TV Time export (obtained via the <b>Tv Time Liberator</b> Chrome extension) to your Trakt account, while providing a detailed matching report. It also includes a module to correct viewing dates in your movie history (some import tools corrupted these dates for a time).",
+        introText: "This experimental app fills the gaps left by official synchronization tools. It allows you to import all your TV series episode watch dates and notes from a TV Time export (obtained via the <b>Tv Time Liberator</b> Chrome extension) to your Trakt account, while providing a detailed matching report. It also includes a module to correct viewing dates in your movie history (some import tools corrupted these dates for a time).",
         btnSwitchLang: "🇫🇷 Passer en français",
         sessionStatus: "Session Status",
         checking: "Checking...",
@@ -86,10 +99,11 @@ const TRANSLATIONS = {
         linking: "Linking in progress...",
         actionRequired: "Action Required",
         instructions: "Open: {url} and enter:",
+        errorPrefix: "Error:",
         
         // Ratings Section
-        ratingsTitle: "TV Time Episode Ratings Importer",
-        ratingsDesc: "Select your exported JSON file to sync your episode ratings to Trakt (<i>shows.json</i> from the TV Time Liberator export).",
+        ratingsTitle: "TV Time Episode Importer",
+        ratingsDesc: "Select your exported JSON file to sync your episode watching dates and ratings to Trakt (<i>shows.json</i> from the TV Time Liberator export).",
         btnImport: "Start Import",
         btnCancel: "Cancel Import",
         btnClear: "Clear data",
@@ -118,6 +132,9 @@ const TRANSLATIONS = {
         thShow: "Show",
         thEpisode: "Episode",
         thTvdb: "TVDB ID",
+        thImdb: "IMDb ID",
+        thSpecial: "Special",
+        thIgnore: "Ignore",
         thRating: "Rating",
         thStatus: "Sync Status",
         badgeUnrated: "🛑 Unrated",
@@ -125,6 +142,15 @@ const TRANSLATIONS = {
         badgeNotFound: "⚠️ Unknown to Trakt",
         badgeAborted: "⏳ Skipped (Cancelled)",
         noMatch: "No episodes match this filter.",
+        btnSaveStore: "💾 Save Corrections",
+        btnDownloadJson: "📥 Export Corrected File",
+        btnRetrySync: "🔄 Sync Corrections",
+        statusSaved: "💾 Changes saved locally!",
+        inconsistentWarning: " ⚠️ {count} episode(s) rejected because rated but without watch history.",
+        noErrorToSyncAlert: "No error rows to sync!",
+        correctionsSynced: "✅ Corrections synced! +{history} history(ies), +{ratings} rating(s).",
+        fileImported: "File imported",
+        syncInProgress: "🔄 Sync in progress",
 
         // Movies Section
         moviesTitle: "Watch History ({count})",
