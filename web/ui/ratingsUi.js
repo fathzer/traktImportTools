@@ -483,15 +483,15 @@ export function setupRatingsListeners() {
     // BOUTON 3 : Retry (En attente d'implémentation de l'import/recherche auto)
     if (btnRetry) {
         btnRetry.onclick = async () => {
-            const failures = localEpisodesStore.filter(ep => ep.status === ImportStatus.NOT_FOUND || ep.status === ImportStatus.INCONSISTENT);
+            const retried = localEpisodesStore.filter(ep => ep.status === ImportStatus.NOT_FOUND && !ep.ignore);
 
-            if (failures.length === 0) {
+            if (retried.length === 0) {
                 alert(t('noErrorToSyncAlert'));
                 return;
             }
 
-            // Préparation : on repasse les échecs en "pending" pour qu'ils soient traités
-            failures.forEach(ep => {
+            // Préparation : on repasse les épisodes à retenter en "pending" pour qu'ils soient traités
+            retried.forEach(ep => {
                 ep.status = ImportStatus.PENDING;
                 if (ep._ref) ep._ref.status = ImportStatus.PENDING;
             });
