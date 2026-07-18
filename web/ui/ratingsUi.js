@@ -11,11 +11,26 @@ let isImportRunning = false;
 let currentProgressCount = 0;
 let totalProgressCount = 0;
 
+let saveTimeout = null;
+
 const STORAGE_EPISODES_KEY = 'trakt_import_episodes';
 const STORAGE_TREE_KEY = 'trakt_import_tree';
 const STORAGE_FILE_NAME_KEY = 'trakt_import_file_name';
 const STORAGE_ADDED_HISTORY_KEY = 'trakt_import_added_history';
 const STORAGE_ADDED_RATINGS_KEY = 'trakt_import_added_ratings';
+
+/**
+ * Sauvegarde automatique avec debounce pour éviter les écritures trop fréquentes
+ */
+function scheduleAutoSave() {
+    if (saveTimeout) {
+        clearTimeout(saveTimeout);
+    }
+    saveTimeout = setTimeout(() => {
+        localStorage.setItem(STORAGE_EPISODES_KEY, JSON.stringify(localEpisodesStore));
+        localStorage.setItem(STORAGE_TREE_KEY, JSON.stringify(localTreeStore));
+    }, 500); // 500ms de délai après la dernière modification
+}
 
 export function renderRatingsUi() {
     // Restauration depuis le localStorage au chargement
@@ -123,13 +138,10 @@ export function renderRatingsUi() {
                 </div>
 
                 <div id="correction-actions" style="margin-top: 20px; display: flex; gap: 10px; flex-wrap: wrap;">
-                    <button id="btn-save-corrections" class="action-btn" style="background-color: #10b981;">
-                        ${t('btnSaveStore') || '💾 Enregistrer les corrections'}
-                    </button>
-                    <button id="btn-retry-corrections" class="action-btn" style="background-color: #3b82f6;">
+                    <button id="btn-retry-corrections" class="action-btn" style="background-color: #3b82f6;" title="${t('btnRetryTooltip') || 'Relancer la synchronisation des épisodes en erreur après avoir corrigé leurs IDs IMDb'}">
                         ${t('btnRetrySync') || '🔄 Synchroniser les corrections'}
                     </button>
-                    <button id="btn-download-json" class="secondary" style="border-color: #6b7280; color: #374151;">
+                    <button id="btn-download-json" class="secondary" style="border-color: #6b7280; color: #374151; margin-left: auto;" title="${t('btnDownloadTooltip') || 'Exporter l\'état complet avec toutes les corrections (succès et échecs)'}">
                         ${t('btnDownloadJson') || '📥 Exporter le fichier corrigé'}
                     </button>
                 </div>
@@ -323,6 +335,9 @@ function renderReportTables() {
                     if (targetEpisode._ref) {
                         targetEpisode._ref.id.imdb = cleanValue;
                     }
+                    
+                    // Sauvegarde automatique
+                    scheduleAutoSave();
                 }
             };
         });
@@ -345,6 +360,9 @@ function renderReportTables() {
                     if (targetEpisode._ref) {
                         targetEpisode._ref.ignore = e.target.checked;
                     }
+                    
+                    // Sauvegarde automatique
+                    scheduleAutoSave();
                 }
             };
         });
@@ -400,7 +418,6 @@ export function setupRatingsListeners() {
     const btnReset = document.getElementById('btn-reset-ratings');
     const fileInput = document.getElementById('ratings-file');
 
-    const btnSave = document.getElementById('btn-save-corrections');
     const btnDownload = document.getElementById('btn-download-json');
     const btnRetry = document.getElementById('btn-retry-corrections');
 
@@ -448,21 +465,7 @@ export function setupRatingsListeners() {
         };
     }
 
-    // BOUTON 1 : Enregistrement de l'état actuel (Arbre + Plat)
-    if (btnSave) {
-        btnSave.onclick = () => {
-            localStorage.setItem(STORAGE_EPISODES_KEY, JSON.stringify(localEpisodesStore));
-            localStorage.setItem(STORAGE_TREE_KEY, JSON.stringify(localTreeStore));
-            const statusEl = document.getElementById('ratings-status');
-            if (statusEl) {
-                statusEl.style.color = "#10b981";
-                statusEl.innerText = t('statusSaved') || "💾 Modifications enregistrées localement !";
-                setTimeout(restoreSummaryMessage, 2000);
-            }
-        };
-    }
-
-    // BOUTON 2 : Exporter l'état d'importation arborescent et enrichi
+    // BOUTON 1 : Exporter l'état d'importation arborescent et enrichi
     if (btnDownload) {
         btnDownload.onclick = () => {
             // On télécharge la structure arborescente enrichie
