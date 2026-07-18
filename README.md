@@ -9,10 +9,37 @@ It is a lightweight, client-side JavaScript application to explore your Trakt mo
 - **Session Persistence:** Securely stores your session access token in your browser's local storage.
 - **Interactive Movie Watch History Grid:** Displays Trakt, IMDb, and TMDb identifiers along with titles and precise watch dates.
 - **Date Correction:** Safely updates movie watch dates at the desired historical timestamp.
-- **TV Time Episode Ratings Import:** Import your TV Time episode ratings using the `TV Time Liberator` export and detect unknown episodes.
+- **TV Time Episode Import:** Import your TV Time episode watch dates and ratings using the `TV Time Liberator` export and detect unknown episodes.
+- **Automatic Corrections Saving:** All corrections (IMDb IDs, ignore flags) are automatically saved to local storage with debounce.
+- **Complete State Export:** Export the full state (successes and failures) with all corrections for backup or re-import.
+- **Retry Failed Episodes:** Retry synchronization of failed episodes after correcting their IMDb IDs.
 
 ## How to Use It
-TODO
+
+### Authentication
+1. Click "Connect to Trakt" to authenticate using OAuth2 Device Flow.
+2. Follow the instructions to authorize the application on Trakt.
+3. Your session will be stored in your browser's local storage.
+
+### Movie Watch History
+1. Click "Load History" to fetch your movie watch history from Trakt.
+2. Review the grid displaying Trakt, IMDb, and TMDb identifiers.
+3. To correct a watch date, click "Update" on any movie row.
+4. Enter the correct date and confirm the update.
+
+### TV Time Episode Import
+1. Export your TV Time data using the `TV Time Liberator` Chrome extension.
+2. Select the `shows.json` file from the export.
+3. Click "Start Import" to begin synchronization with Trakt.
+4. Review the detailed report:
+   - **Successes:** Episodes successfully imported
+   - **Failures:** Episodes not found on Trakt (can be corrected), or with inconsistent data (rated but not watched)
+5. For failed episodes:
+   - Correct IMDb IDs manually in the table
+   - Mark episodes to ignore with the checkbox if you prefer to enter them manually in Trakt
+   - Corrections are automatically saved
+6. Click "Retry" to re-synchronize corrected episodes
+7. Use "Export Corrected File" to save the complete state for backup (this file can be imported later to retry failed episodes)
 
 ## Project Structure
 
