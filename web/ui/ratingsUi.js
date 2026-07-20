@@ -2,6 +2,7 @@ import { parseTvTimeRatings } from '../tvTimeLiberator.js';
 import { importRatings } from '../traktApi.js';
 import { ImportStatus } from '../constants.js';
 import { t } from './i18n.js';
+import { openImdbHelperDialog } from './imdbHelper.js';
 
 let localEpisodesStore = []; // Liste plate
 let localTreeStore = [];      // Structure arborescente (Séries -> Saisons -> Épisodes)
@@ -138,8 +139,11 @@ export function renderRatingsUi() {
                 </div>
 
                 <div id="correction-actions" style="margin-top: 20px; display: flex; gap: 10px; flex-wrap: wrap;">
+                    <button id="btn-imdb-helper" class="secondary" style="border-color: #6b7280; color: #374151;" title="${t('btnImdbHelperTooltip') || 'Rechercher les identifiants IMDb via l\'API Trakt'}">
+                        ${t('btnImdbHelper') || '� Aide IMDb'}
+                    </button>
                     <button id="btn-retry-corrections" class="action-btn" style="background-color: #3b82f6;" title="${t('btnRetryTooltip') || 'Relancer la synchronisation des épisodes en erreur après avoir corrigé leurs IDs IMDb'}">
-                        ${t('btnRetrySync') || '🔄 Synchroniser les corrections'}
+                        ${t('btnRetrySync') || '� Synchroniser les corrections'}
                     </button>
                     <button id="btn-download-json" class="secondary" style="border-color: #6b7280; color: #374151; margin-left: auto;" title="${t('btnDownloadTooltip') || 'Exporter l\'état complet avec toutes les corrections (succès et échecs)'}">
                         ${t('btnDownloadJson') || '📥 Exporter le fichier corrigé'}
@@ -159,7 +163,19 @@ export function renderRatingsUi() {
         updateReportCounters();
         renderReportTables();
         restoreSummaryMessage();
+        updateImdbHelperButtonState();
     }
+}
+
+/**
+ * Updates the IMDB helper button state based on NOT_FOUND errors
+ */
+function updateImdbHelperButtonState() {
+    const btnImdbHelper = document.getElementById('btn-imdb-helper');
+    if (!btnImdbHelper) return;
+
+    const notFounds = localEpisodesStore.filter(ep => ep.status === ImportStatus.NOT_FOUND);
+    btnImdbHelper.disabled = notFounds.length === 0;
 }
 
 /**
@@ -420,6 +436,7 @@ export function setupRatingsListeners() {
 
     const btnDownload = document.getElementById('btn-download-json');
     const btnRetry = document.getElementById('btn-retry-corrections');
+    const btnImdbHelper = document.getElementById('btn-imdb-helper');
 
     if (fileInput && btnImport) {
         fileInput.onchange = () => {
@@ -522,6 +539,15 @@ export function setupRatingsListeners() {
             } catch (err) {
                 // ... gestion erreur ...
             }
+        };
+    }
+
+    // BOUTON IMDB Helper
+    if (btnImdbHelper) {
+        btnImdbHelper.onclick = () => {
+            const correctionActions = document.getElementById('correction-actions');
+            const notFounds = localEpisodesStore.filter(ep => ep.status === ImportStatus.NOT_FOUND && !ep.ignore);
+            openImdbHelperDialog(correctionActions, notFounds);
         };
     }
 
