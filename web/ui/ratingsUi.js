@@ -91,12 +91,14 @@ export function renderRatingsUi() {
             <details id="ratings-report-details" class="${reportClass}" style="margin-top: 20px; border: 1px solid #ccc; border-radius: 8px; padding: 15px; background: #fff;" ${hasDataLoaded && !isImportRunning ? 'open' : ''}>
                 <summary style="cursor: pointer; font-weight: bold; padding: 5px;">${t('reportSummary')}</summary>
                 
-                <div style="margin-top: 15px; margin-bottom: 25px;">
-                    <h4 style="margin: 0 0 10px 0; color: #16a34a; display: flex; align-items: center; justify-content: space-between; font-size: 14px;">
-                        <span>${t('titleSuccesses')}</span>
-                        <span id="cnt-success" style="background: #dcfce7; color: #16a34a; padding: 2px 8px; border-radius: 12px; font-size: 12px; font-weight: bold;">0</span>
-                    </h4>
-                    <div style="max-height: 350px; overflow-y: auto; border: 1px solid #e5e7eb; border-radius: 6px; box-shadow: 0 1px 2px rgba(0,0,0,0.05);">
+                <details id="success-details" style="margin-top: 15px; margin-bottom: 25px;" open>
+                    <summary style="cursor: pointer; font-weight: bold; padding: 5px;">
+                        <h4 style="margin: 0; color: #16a34a; display: flex; align-items: center; justify-content: space-between; font-size: 14px;">
+                            <span>${t('titleSuccesses')}</span>
+                            <span id="cnt-success" style="background: #dcfce7; color: #16a34a; padding: 2px 8px; border-radius: 12px; font-size: 12px; font-weight: bold;">0</span>
+                        </h4>
+                    </summary>
+                    <div style="margin-top: 10px; max-height: 350px; overflow-y: auto; border: 1px solid #e5e7eb; border-radius: 6px; box-shadow: 0 1px 2px rgba(0,0,0,0.05);">
                         <table style="font-size: 13px; margin-top: 0; width: 100%; border-collapse: collapse;">
                             <thead>
                                 <tr style="position: sticky; top: 0; background: #f3f4f6; z-index: 1;">
@@ -111,7 +113,7 @@ export function renderRatingsUi() {
                             <tbody id="ratings-success-body"></tbody>
                         </table>
                     </div>
-                </div>
+                </details>
 
                 <div style="margin-top: 15px; margin-bottom: 25px;">
                     <h4 style="margin: 0 0 10px 0; color: #dc2626; display: flex; align-items: center; justify-content: space-between; font-size: 14px;">

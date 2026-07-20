@@ -172,16 +172,17 @@ export function openImdbHelperDialog(targetElement, episodes) {
                     console.log(`[IMDB Helper] Processing show: ${showName} (TVDB ID: ${tvdbId})`);
                     
                     try {
-                        const episodeMap = await fetchShowSeasonsByTvdbId(Number(tvdbId));
-                        console.log(`[IMDB Helper] API response for ${showName}:`, episodeMap ? `${episodeMap.size} episodes found` : 'null (show not found)');
+                        const result = await fetchShowSeasonsByTvdbId(Number(tvdbId));
+                        console.log(`[IMDB Helper] API response for ${showName}:`, result ? `${result.episodeMap.size} episodes found` : 'null (show not found)');
                         
-                        if (episodeMap === null) {
+                        if (result === null) {
                             // Show not found
                             console.log(`[IMDB Helper] Show not found: ${showName}`);
                             showEpisodes.forEach(ep => {
-                                updateEpisodeConfidence(episodes.indexOf(ep), 'showNotFound', null);
+                                updateEpisodeConfidence(episodes.indexOf(ep), 'showNotFound', null, null);
                             });
                         } else {
+                            const { slug, episodeMap } = result;
                             // Show found, process each episode
                             showEpisodes.forEach(ep => {
                                 const seasonEpisodes = Array.from(episodeMap.values())
@@ -192,21 +193,21 @@ export function openImdbHelperDialog(targetElement, episodes) {
                                 if (seasonEpisodes.length === 0) {
                                     // Season not found
                                     console.log(`[IMDB Helper] Season not found: ${showName} S${ep.seasonNumber}`);
-                                    updateEpisodeConfidence(episodes.indexOf(ep), 'seasonNotFound', null);
+                                    updateEpisodeConfidence(episodes.indexOf(ep), 'seasonNotFound', null, slug);
                                 } else if (ep.special) {
                                     // Special episode - use last episode of season
                                     const lastEpisode = seasonEpisodes[seasonEpisodes.length - 1];
                                     console.log(`[IMDB Helper] Special episode for ${showName}: using last episode IMDb ID ${lastEpisode.imdbId}`);
-                                    updateEpisodeConfidence(episodes.indexOf(ep), 'uncertain', lastEpisode);
+                                    updateEpisodeConfidence(episodes.indexOf(ep), 'uncertain', lastEpisode, slug);
                                 } else {
                                     // Non-special episode - try to find exact match
                                     const exactMatch = seasonEpisodes.find(e => e.episode === ep.episodeNumber);
                                     if (exactMatch) {
                                         console.log(`[IMDB Helper] Episode found: ${showName} S${ep.seasonNumber}E${ep.episodeNumber} -> IMDb ID ${exactMatch.imdbId}`);
-                                        updateEpisodeConfidence(episodes.indexOf(ep), 'high', exactMatch);
+                                        updateEpisodeConfidence(episodes.indexOf(ep), 'high', exactMatch, slug);
                                     } else {
                                         console.log(`[IMDB Helper] Episode not found: ${showName} S${ep.seasonNumber}E${ep.episodeNumber}`);
-                                        updateEpisodeConfidence(episodes.indexOf(ep), 'absent', null);
+                                        updateEpisodeConfidence(episodes.indexOf(ep), 'absent', null, slug);
                                     }
                                 }
                             });
@@ -215,7 +216,7 @@ export function openImdbHelperDialog(targetElement, episodes) {
                         // Error occurred
                         console.error(`[IMDB Helper] Error processing show ${showName}:`, err);
                         showEpisodes.forEach(ep => {
-                            updateEpisodeConfidence(episodes.indexOf(ep), 'error', null);
+                            updateEpisodeConfidence(episodes.indexOf(ep), 'error', null, null);
                         });
                     }
                 }
@@ -234,8 +235,9 @@ export function openImdbHelperDialog(targetElement, episodes) {
  * @param {number} index - Episode index in the list
  * @param {string} confidenceType - Type of confidence (showNotFound, seasonNotFound, high, uncertain, absent, error)
  * @param {Object} episodeData - Episode data from Trakt API (if found)
+ * @param {string} slug - Trakt show slug (if show was found)
  */
-function updateEpisodeConfidence(index, confidenceType, episodeData) {
+function updateEpisodeConfidence(index, confidenceType, episodeData, slug) {
     const tbody = document.querySelector('#imdb-helper-content tbody');
     if (!tbody) return;
     
@@ -244,6 +246,7 @@ function updateEpisodeConfidence(index, confidenceType, episodeData) {
     
     const confidenceCell = row.children[5]; // Confidence column
     const imdbInput = row.querySelector('.imdb-helper-input');
+    const showTitleCell = row.children[0]; // Show title column
     
     let confidenceText = '';
     let confidenceIcon = '';
@@ -285,6 +288,34 @@ function updateEpisodeConfidence(index, confidenceType, episodeData) {
     
     if (confidenceCell) {
         confidenceCell.textContent = `${confidenceIcon} ${confidenceText}`;
+    }
+    
+    // Add Trakt icon if slug is available and show was found
+    if (slug && showTitleCell) {
+        const existingTraktIcon = showTitleCell.querySelector('.trakt-icon');
+        if (!existingTraktIcon) {
+            const seasonNumber = parseInt(row.children[1].textContent.match(/S(\d+)/)?.[1] || '0');
+            const traktUrl = seasonNumber > 0 
+                ? `https://app.trakt.tv/shows/${slug}?season=${seasonNumber}&mode=show`
+                : `https://app.trakt.tv/shows/${slug}?mode=show`;
+            
+            const traktIcon = document.createElement('a');
+            traktIcon.href = traktUrl;
+            traktIcon.target = '_blank';
+            traktIcon.rel = 'noopener noreferrer';
+            traktIcon.className = 'trakt-icon';
+            traktIcon.style.cssText = 'margin-left: 5px; text-decoration: none;';
+            traktIcon.title = 'Voir sur Trakt';
+            
+            const traktImg = document.createElement('img');
+            traktImg.src = 'https://app.trakt.tv/favicon.svg';
+            traktImg.alt = 'Trakt';
+            traktImg.width = 14;
+            traktImg.height = 14;
+            
+            traktIcon.appendChild(traktImg);
+            showTitleCell.appendChild(traktIcon);
+        }
     }
 }
 

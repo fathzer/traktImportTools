@@ -225,7 +225,7 @@ export async function updateMovieWatchedDate(historyId, movieIds, newDateString)
  * Fetches show seasons with episodes by TVDB ID using Trakt API.
  * First searches for the show by TVDB ID to get the slug, then fetches seasons with episodes.
  * @param {number} tvdbId - The TVDB ID of the show
- * @returns {Promise<Map<string, Object>|null>} - A map of episode IMDb IDs to their season/episode data, or null if the show is not found
+ * @returns {Promise<Object|null>} - An object with { slug, episodeMap } or null if the show is not found
  */
 export async function fetchShowSeasonsByTvdbId(tvdbId) {
     const headers = getHeaders();
@@ -301,5 +301,5 @@ export async function fetchShowSeasonsByTvdbId(tvdbId) {
     });
     
     console.log(`[Trakt API] Built episode map with ${episodeMap.size} entries`);
-    return episodeMap;
+    return { slug, episodeMap };
 }
