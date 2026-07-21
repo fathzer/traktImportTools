@@ -220,3 +220,86 @@ export async function updateMovieWatchedDate(historyId, movieIds, newDateString)
     });
     if (!addResponse.ok) throw new Error(`Erreur réinscription: ${addResponse.status}`);
 }
+
+/**
+ * Fetches show seasons with episodes by TVDB ID using Trakt API.
+ * First searches for the show by TVDB ID to get the slug, then fetches seasons with episodes.
+ * @param {number} tvdbId - The TVDB ID of the show
+ * @returns {Promise<Object|null>} - An object with { slug, episodeMap } or null if the show is not found
+ */
+export async function fetchShowSeasonsByTvdbId(tvdbId) {
+    const headers = getHeaders();
+    
+    // Step 1: Search for the show by TVDB ID to get the slug
+    const searchUrl = `${CONFIG.BASE_URL}/search/tvdb/${tvdbId}?type=show`;
+    console.log(`[Trakt API] Request: GET ${searchUrl}`);
+    const searchResponse = await fetch(searchUrl, {
+        method: 'GET',
+        headers: headers
+    });
+    console.log(`[Trakt API] Search response status: ${searchResponse.status}`);
+    
+    // Handle 404 (show not found) - return null instead of throwing error
+    if (searchResponse.status === 404) {
+        console.log(`[Trakt API] Show not found (404) for TVDB ID: ${tvdbId}`);
+        return null;
+    }
+    
+    if (!searchResponse.ok) {
+        console.error(`[Trakt API] Search error: ${searchResponse.status}`);
+        throw new Error(`Trakt Search Error: ${searchResponse.status}`);
+    }
+    
+    const searchData = await searchResponse.json();
+    console.log(`[Trakt API] Search response data:`, searchData);
+    
+    if (!searchData || searchData.length === 0) {
+        console.log(`[Trakt API] Empty search result for TVDB ID: ${tvdbId}`);
+        return null;
+    }
+    
+    const show = searchData[0].show;
+    const slug = show.ids.slug;
+    console.log(`[Trakt API] Found show slug: ${slug}`);
+    
+    // Step 2: Fetch seasons with episodes using the slug
+    const seasonsUrl = `${CONFIG.BASE_URL}/shows/${slug}/seasons?extended=episodes`;
+    console.log(`[Trakt API] Request: GET ${seasonsUrl}`);
+    const seasonsResponse = await fetch(seasonsUrl, {
+        method: 'GET',
+        headers: headers
+    });
+    console.log(`[Trakt API] Seasons response status: ${seasonsResponse.status}`);
+    
+    if (!seasonsResponse.ok) {
+        console.error(`[Trakt API] Seasons error: ${seasonsResponse.status}`);
+        throw new Error(`Trakt Seasons Error: ${seasonsResponse.status}`);
+    }
+    
+    const seasonsData = await seasonsResponse.json();
+    console.log(`[Trakt API] Seasons response data:`, seasonsData);
+    
+    // Build a map: imdbId -> season/episode info
+    const episodeMap = new Map();
+    
+    seasonsData.forEach(season => {
+        if (season.episodes) {
+            season.episodes.forEach(episode => {
+                const imdbId = episode.ids.imdb;
+                if (imdbId) {
+                    episodeMap.set(imdbId, {
+                        imdbId: imdbId,
+                        season: season.number,
+                        episode: episode.number,
+                        title: episode.title,
+                        tvdbId: episode.ids.tvdb,
+                        traktId: episode.ids.trakt
+                    });
+                }
+            });
+        }
+    });
+    
+    console.log(`[Trakt API] Built episode map with ${episodeMap.size} entries`);
+    return { slug, episodeMap };
+}

@@ -10,6 +10,7 @@ It is a lightweight, client-side JavaScript application to explore your Trakt mo
 - **Interactive Movie Watch History Grid:** Displays Trakt, IMDb, and TMDb identifiers along with titles and precise watch dates.
 - **Date Correction:** Safely updates movie watch dates at the desired historical timestamp.
 - **TV Time Episode Import:** Import your TV Time episode watch dates and ratings using the `TV Time Liberator` export and detect unknown episodes.
+- **IMDb Helper Dialog:** Utility to search IMDb IDs for episodes with unknown TVDB IDs, with confidence indicators (high/uncertain/absent/error) and direct links to IMDb and Trakt pages.
 - **Automatic Corrections Saving:** All corrections (IMDb IDs, ignore flags) are automatically saved to local storage with debounce.
 - **Complete State Export:** Export the full state (successes and failures) with all corrections for backup or re-import.
 - **Retry Failed Episodes:** Retry synchronization of failed episodes after correcting their IMDb IDs.
@@ -35,30 +36,40 @@ It is a lightweight, client-side JavaScript application to explore your Trakt mo
    - **Successes:** Episodes successfully imported
    - **Failures:** Episodes not found on Trakt (can be corrected), or with inconsistent data (rated but not watched)
 5. For failed episodes:
-   - Correct IMDb IDs manually in the table
+   - Correct IMDb IDs manually in the table or use the IMDb Helper to automatically search for IMDb IDs via Trakt API
+     - The helper displays confidence indicators (🚀 high, ☢️ uncertain, ❓ absent, 🔥 error)
+     - Click the 🔗 icon to open the episode on IMDb for verification
+     - Click the Trakt icon to view the show/season on Trakt
+     - Click the 📋 button to copy and apply the IMDb ID to all episodes of the same show
    - Mark episodes to ignore with the checkbox if you prefer to enter them manually in Trakt
    - Corrections are automatically saved
 6. Click "Retry" to re-synchronize corrected episodes
 7. Use "Export Corrected File" to save the complete state for backup (this file can be imported later to retry failed episodes)
+8. **Important:** Once the import is complete and verified, click "Clear data" to clear all data from IndexedDB. This frees up disk space used to store the import state across browser sessions.
 
 ## Project Structure
 
 ```
 traktTest/
-├── index.html              # The main user interface
-├── auth.js                 # Authentication and Device Flow handling module
-├── oauth.js                # OAuth2 device flow implementation
-├── traktApi.js             # Core module managing GET/POST requests to Trakt API
-├── tvTimeLiberator.js      # TV Time data liberation utilities
-├── config.js               # Personal secrets and API Keys (DO NOT COMMIT)
+├── web/                    # Application source files
+│   ├── index.html          # The main user interface
+│   ├── auth.js             # Authentication and Device Flow handling module
+│   ├── oauth.js            # OAuth2 device flow implementation
+│   ├── traktApi.js         # Core module managing GET/POST requests to Trakt API
+│   ├── tvTimeLiberator.js  # TV Time liberator utilities
+│   ├── config.js           # Application API Key and Trakt API URL
+│   ├── constants.js        # Application constants
+│   ├── storage.js          # Local storage management module
+│   └── ui/                 # User interface modules
+│       ├── authUi.js       # Authentication UI components
+│       ├── i18n.js         # Internationalization support
+│       ├── mainUi.js       # Main UI controller
+│       ├── moviesUi.js     # Movies grid UI
+│       ├── ratingsUi.js    # Ratings display UI
+│       └── imdbHelper.js   # IMDb ID search and correction helper
 ├── .gitignore              # Prevents sensitive files from being pushed to Git
 ├── LICENSE                 # Project license
-└── ui/                     # User interface modules
-    ├── authUi.js           # Authentication UI components
-    ├── i18n.js             # Internationalization support
-    ├── mainUi.js           # Main UI controller
-    ├── moviesUi.js         # Movies grid UI
-    └── ratingsUi.js        # Ratings display UI
+└── README.md               # This file
 ```
 
 ## Setup Instructions for Developers

@@ -1,4 +1,4 @@
-import { runTraktAuth, clearToken } from '../traktApi.js';
+import { runTraktAuth, clearToken, getStoredToken } from '../traktApi.js';
 import { syncUiState } from './mainUi.js';
 import { t } from './i18n.js';
 
@@ -8,7 +8,7 @@ export function renderAuthUi() {
             <h3>${t('sessionStatus')}</h3>
             <p id="session-status">${t('checking')}</p>
             <div id="logged-out-actions" class="hidden"><button id="btn-login">${t('login')}</button></div>
-            <div id="loggedInActions" class="hidden"><button id="btn-logout" class="secondary">${t('logout')}</button></div>
+            <div id="loggedInActions" class="hidden"><button id="btn-view-token" class="secondary">${t('viewToken')}</button><button id="btn-logout" class="secondary">${t('logout')}</button></div>
         </div>
     `;
 
@@ -53,6 +53,13 @@ export function setupAuthListeners() {
             () => { syncUiState(); },
             (err) => { alert(t('errorPrefix') + " " + err.message); syncUiState(); }
         );
+    });
+
+    document.getElementById('btn-view-token').addEventListener('click', () => {
+        const token = getStoredToken();
+        if (token) {
+            alert(t('tokenValue', { token }));
+ }
     });
 
     document.getElementById('btn-logout').addEventListener('click', () => {

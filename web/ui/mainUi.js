@@ -4,12 +4,12 @@ import { renderMoviesUi, toggleMoviesVisibility, setupMoviesListeners } from './
 import { renderRatingsUi, toggleRatingsVisibility, setupRatingsListeners } from './ratingsUi.js';
 import { getLang, setLang, t } from './i18n.js';
 
-export function initApplication() {
+export async function initApplication() {
     // 1. Avant toute chose, on génère la structure HTML globale de l'IHM dans le root
     buildGlobalStructure();
     
     // 2. On rend le contenu de chaque composant
-    renderAll();
+    await renderAll();
     
     // 3. On branche les écouteurs
     setupAllListeners();
@@ -30,7 +30,7 @@ function buildGlobalStructure() {
     `;
 }
 
-function renderAll() {
+async function renderAll() {
     // Rend le bouton de langue (utilise le conteneur créé juste au-dessus)
     renderLangSwitcher();
     
@@ -44,7 +44,7 @@ function renderAll() {
 
     // Rend les sous-modules
     renderAuthUi();
-    renderRatingsUi();
+    await renderRatingsUi();
     renderMoviesUi();
 }
 
@@ -56,7 +56,6 @@ function setupAllListeners() {
 }
 
 function renderLangSwitcher() {
-    const current = getLang();
     document.getElementById('lang-container').innerHTML = `
         <button id="btn-toggle-lang" class="secondary" style="float: right; font-size:12px; padding:6px 10px;">
             ${t('btnSwitchLang')}
@@ -68,12 +67,12 @@ function setupLangListener() {
     const btn = document.getElementById('btn-toggle-lang');
     if (!btn) return;
 
-    btn.addEventListener('click', () => {
+    btn.addEventListener('click', async () => {
         const nextLang = getLang() === 'fr' ? 'en' : 'fr';
         setLang(nextLang);
-        
+
         // On re-rend uniquement le contenu, pas besoin de reconstruire la structure squelette !
-        renderAll();
+        await renderAll();
         setupAllListeners();
         syncUiState();
     });
