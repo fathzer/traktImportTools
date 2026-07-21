@@ -17,6 +17,8 @@ It is a lightweight, client-side JavaScript application to explore your Trakt mo
 
 ## How to Use It
 
+Go to https://fathzer.github.io/traktImportTools/
+
 ### Authentication
 1. Click "Connect to Trakt" to authenticate using OAuth2 Device Flow.
 2. Follow the instructions to authorize the application on Trakt.
