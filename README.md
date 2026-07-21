@@ -45,6 +45,7 @@ It is a lightweight, client-side JavaScript application to explore your Trakt mo
    - Corrections are automatically saved
 6. Click "Retry" to re-synchronize corrected episodes
 7. Use "Export Corrected File" to save the complete state for backup (this file can be imported later to retry failed episodes)
+8. **Important:** Once the import is complete and verified, click "Clear data" to clear all data from IndexedDB. This frees up disk space used to store the import state across browser sessions.
 
 ## Project Structure
 
