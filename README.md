@@ -50,20 +50,25 @@ It is a lightweight, client-side JavaScript application to explore your Trakt mo
 
 ```
 traktTest/
-├── index.html              # The main user interface
-├── auth.js                 # Authentication and Device Flow handling module
-├── oauth.js                # OAuth2 device flow implementation
-├── traktApi.js             # Core module managing GET/POST requests to Trakt API
-├── tvTimeLiberator.js      # TV Time data liberation utilities
-├── config.js               # Personal secrets and API Keys (DO NOT COMMIT)
+├── web/                    # Application source files
+│   ├── index.html          # The main user interface
+│   ├── auth.js             # Authentication and Device Flow handling module
+│   ├── oauth.js            # OAuth2 device flow implementation
+│   ├── traktApi.js         # Core module managing GET/POST requests to Trakt API
+│   ├── tvTimeLiberator.js  # TV Time liberator utilities
+│   ├── config.js           # Application API Key and Trakt API URL
+│   ├── constants.js        # Application constants
+│   ├── storage.js          # Local storage management module
+│   └── ui/                 # User interface modules
+│       ├── authUi.js       # Authentication UI components
+│       ├── i18n.js         # Internationalization support
+│       ├── mainUi.js       # Main UI controller
+│       ├── moviesUi.js     # Movies grid UI
+│       ├── ratingsUi.js    # Ratings display UI
+│       └── imdbHelper.js   # IMDb ID search and correction helper
 ├── .gitignore              # Prevents sensitive files from being pushed to Git
 ├── LICENSE                 # Project license
-└── ui/                     # User interface modules
-    ├── authUi.js           # Authentication UI components
-    ├── i18n.js             # Internationalization support
-    ├── mainUi.js           # Main UI controller
-    ├── moviesUi.js         # Movies grid UI
-    └── ratingsUi.js        # Ratings display UI
+└── README.md               # This file
 ```
 
 ## Setup Instructions for Developers
