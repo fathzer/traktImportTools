@@ -67,12 +67,12 @@ function setupLangListener() {
     const btn = document.getElementById('btn-toggle-lang');
     if (!btn) return;
 
-    btn.addEventListener('click', () => {
+    btn.addEventListener('click', async () => {
         const nextLang = getLang() === 'fr' ? 'en' : 'fr';
         setLang(nextLang);
-        
+
         // On re-rend uniquement le contenu, pas besoin de reconstruire la structure squelette !
-        renderAll();
+        await renderAll();
         setupAllListeners();
         syncUiState();
     });
