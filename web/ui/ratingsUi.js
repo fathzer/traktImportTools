@@ -2,7 +2,8 @@ import { parseTvTimeRatings } from '../tvTimeLiberator.js';
 import { importRatings } from '../traktApi.js';
 import { ImportStatus } from '../constants.js';
 import { t } from './i18n.js';
-import { openImdbHelperDialog } from './imdbHelper.js';
+import { openImdbHelperDialog, subscribeToImdbUpdate } from './imdbHelper.js';
+import { saveEpisodes, loadEpisodes, saveMetadata, loadMetadata, clearEpisodes } from '../storage.js';
 
 let localEpisodesStore = []; // Liste plate
 let localTreeStore = [];      // Structure arborescente (Séries -> Saisons -> Épisodes)
@@ -14,11 +15,9 @@ let totalProgressCount = 0;
 
 let saveTimeout = null;
 
-const STORAGE_EPISODES_KEY = 'trakt_import_episodes';
-const STORAGE_TREE_KEY = 'trakt_import_tree';
-const STORAGE_FILE_NAME_KEY = 'trakt_import_file_name';
-const STORAGE_ADDED_HISTORY_KEY = 'trakt_import_added_history';
-const STORAGE_ADDED_RATINGS_KEY = 'trakt_import_added_ratings';
+const STORAGE_FILE_NAME_KEY = 'fileName';
+const STORAGE_ADDED_HISTORY_KEY = 'addedHistory';
+const STORAGE_ADDED_RATINGS_KEY = 'addedRatings';
 
 /**
  * Sauvegarde automatique avec debounce pour éviter les écritures trop fréquentes
@@ -27,33 +26,35 @@ function scheduleAutoSave() {
     if (saveTimeout) {
         clearTimeout(saveTimeout);
     }
-    saveTimeout = setTimeout(() => {
-        localStorage.setItem(STORAGE_EPISODES_KEY, JSON.stringify(localEpisodesStore));
-        localStorage.setItem(STORAGE_TREE_KEY, JSON.stringify(localTreeStore));
+    saveTimeout = setTimeout(async () => {
+        try {
+            await saveEpisodes(localTreeStore);
+        } catch (error) {
+            console.error('Error saving episodes:', error);
+        }
     }, 500); // 500ms de délai après la dernière modification
 }
 
-export function renderRatingsUi() {
-    // Restauration depuis le localStorage au chargement
+export async function renderRatingsUi() {
+    // Restauration depuis IndexedDB au chargement
     if (localEpisodesStore.length === 0) {
-        const storedEpisodes = localStorage.getItem(STORAGE_EPISODES_KEY);
-        const storedTree = localStorage.getItem(STORAGE_TREE_KEY);
-        if (storedEpisodes && storedTree) {
-            try {
-                localEpisodesStore = JSON.parse(storedEpisodes);
-                localTreeStore = JSON.parse(storedTree);
+        try {
+            const stored = await loadEpisodes();
+            if (stored.tree.length > 0) {
+                localTreeStore = stored.tree;
+                localEpisodesStore = stored.flat;
                 
                 // Recréer les liens de référence mémoire après désérialisation
                 relinkFlatToTree();
-            } catch (e) {
-                console.error("Erreur lors de la lecture des données persistées :", e);
-                localEpisodesStore = [];
-                localTreeStore = [];
             }
+        } catch (e) {
+            console.error("Erreur lors de la lecture des données persistées :", e);
+            localEpisodesStore = [];
+            localTreeStore = [];
         }
     }
 
-    const storedFileName = localStorage.getItem(STORAGE_FILE_NAME_KEY);
+    const storedFileName = await loadMetadata(STORAGE_FILE_NAME_KEY);
     const hasDataLoaded = localEpisodesStore && localEpisodesStore.length > 0;
     
     const fileSelectorClass = (hasDataLoaded || isImportRunning) ? 'hidden' : '';
@@ -92,11 +93,9 @@ export function renderRatingsUi() {
                 <summary style="cursor: pointer; font-weight: bold; padding: 5px;">${t('reportSummary')}</summary>
                 
                 <details id="success-details" style="margin-top: 15px; margin-bottom: 25px;" open>
-                    <summary style="cursor: pointer; font-weight: bold; padding: 5px;">
-                        <h4 style="margin: 0; color: #16a34a; display: flex; align-items: center; justify-content: space-between; font-size: 14px;">
-                            <span>${t('titleSuccesses')}</span>
-                            <span id="cnt-success" style="background: #dcfce7; color: #16a34a; padding: 2px 8px; border-radius: 12px; font-size: 12px; font-weight: bold;">0</span>
-                        </h4>
+                    <summary style="cursor: pointer; font-weight: bold; padding: 5px; color: #16a34a; font-size: 14px;">
+                        ${t('titleSuccesses')}
+                        <span id="cnt-success" style="background: #dcfce7; color: #16a34a; padding: 2px 8px; border-radius: 12px; font-size: 12px; font-weight: bold; margin-left: auto;">0</span>
                     </summary>
                     <div style="margin-top: 10px; max-height: 350px; overflow-y: auto; border: 1px solid #e5e7eb; border-radius: 6px; box-shadow: 0 1px 2px rgba(0,0,0,0.05);">
                         <table style="font-size: 13px; margin-top: 0; width: 100%; border-collapse: collapse;">
@@ -203,12 +202,12 @@ function relinkFlatToTree() {
     });
 }
 
-function restoreSummaryMessage() {
+async function restoreSummaryMessage() {
     const statusEl = document.getElementById('ratings-status');
     if (!statusEl || localEpisodesStore.length === 0) return;
 
-    const addedHistory = parseInt(localStorage.getItem(STORAGE_ADDED_HISTORY_KEY) || "0", 10);
-    const addedRatings = parseInt(localStorage.getItem(STORAGE_ADDED_RATINGS_KEY) || "0", 10);
+    const addedHistory = (await loadMetadata(STORAGE_ADDED_HISTORY_KEY)) || 0;
+    const addedRatings = (await loadMetadata(STORAGE_ADDED_RATINGS_KEY)) || 0;
 
     const pendings = localEpisodesStore.filter(ep => ep.status === ImportStatus.PENDING);
     const notFounds = localEpisodesStore.filter(ep => ep.status === ImportStatus.NOT_FOUND);
@@ -459,7 +458,7 @@ export function setupRatingsListeners() {
     }
 
     if (btnReset) {
-        btnReset.onclick = () => {
+        btnReset.onclick = async () => {
             localEpisodesStore = [];
             localTreeStore = [];
             isImportAborted = false;
@@ -467,13 +466,9 @@ export function setupRatingsListeners() {
             currentProgressCount = 0;
             totalProgressCount = 0;
             
-            localStorage.removeItem(STORAGE_EPISODES_KEY);
-            localStorage.removeItem(STORAGE_TREE_KEY);
-            localStorage.removeItem(STORAGE_FILE_NAME_KEY);
-            localStorage.removeItem(STORAGE_ADDED_HISTORY_KEY);
-            localStorage.removeItem(STORAGE_ADDED_RATINGS_KEY);
+            await clearEpisodes();
 
-            renderRatingsUi();
+            await renderRatingsUi();
             
             const token = localStorage.getItem('trakt_access_token');
             if (token) {
@@ -486,13 +481,13 @@ export function setupRatingsListeners() {
 
     // BOUTON 1 : Exporter l'état d'importation arborescent et enrichi
     if (btnDownload) {
-        btnDownload.onclick = () => {
+        btnDownload.onclick = async () => {
             // On télécharge la structure arborescente enrichie
             const blob = new Blob([JSON.stringify(localTreeStore, null, 2)], { type: 'application/json' });
             const url = URL.createObjectURL(blob);
             
             const a = document.createElement('a');
-            const sourceName = localStorage.getItem(STORAGE_FILE_NAME_KEY) || 'shows-corrected.json';
+            const sourceName = (await loadMetadata(STORAGE_FILE_NAME_KEY)) || 'shows-corrected.json';
             a.href = url;
             a.download = sourceName.replace('.json', '-state.json');
             document.body.appendChild(a);
@@ -553,9 +548,27 @@ export function setupRatingsListeners() {
         };
     }
 
+    // Subscribe to IMDb updates from IMDB helper
+    subscribeToImdbUpdate((tvdbId, imdbId) => {
+        // Find episodes with matching TVDB ID and update their IMDb ID
+        localEpisodesStore.forEach(ep => {
+            if (ep.tvdbId === tvdbId) {
+                ep.imdbId = imdbId;
+                // Also update the reference in the tree store if it exists (same path as manual edit)
+                if (ep._ref) {
+                    ep._ref.id.imdb = imdbId;
+                }
+            }
+        });
+        
+        // Re-render the failures table to show updated IMDb IDs
+        renderReportTables();
+        scheduleAutoSave();
+    });
+
     if (!fileInput || !btnImport) return;
 
-    btnImport.onclick = () => {
+    btnImport.onclick = async () => {
         const file = fileInput.files[0];
         if (!file) return;
 
@@ -563,7 +576,7 @@ export function setupRatingsListeners() {
         
         const activeFileNameEl = document.getElementById('ratings-active-filename');
         if (activeFileNameEl) activeFileNameEl.innerText = `📄 ${t('fileImported')} : ${file.name}`;
-        localStorage.setItem(STORAGE_FILE_NAME_KEY, file.name);
+        await saveMetadata(STORAGE_FILE_NAME_KEY, file.name);
 
         const reportDetails = document.getElementById('ratings-report-details');
         if (reportDetails) reportDetails.classList.add('hidden');
@@ -626,22 +639,21 @@ export function setupRatingsListeners() {
  * @param {Object} result - Le résultat retourné par importRatings
  * @param {boolean} isIncremental - Si vrai, on ajoute les scores aux compteurs existants (cas du Retry). Sinon, on écrase (cas de l'Import initial).
  */
-function finalizeImportState(result, isIncremental = false) {
+async function finalizeImportState(result, isIncremental = false) {
     localEpisodesStore = result.updatedEpisodes;
 
-    // 1. Sauvegarde des structures en local
-    localStorage.setItem(STORAGE_EPISODES_KEY, JSON.stringify(localEpisodesStore));
-    localStorage.setItem(STORAGE_TREE_KEY, JSON.stringify(localTreeStore));
+    // 1. Sauvegarde des structures en IndexedDB
+    await saveEpisodes(localTreeStore);
 
     // 2. Gestion propre des compteurs Trakt
     if (isIncremental) {
-        const prevHistory = parseInt(localStorage.getItem(STORAGE_ADDED_HISTORY_KEY) || "0", 10);
-        const prevRatings = parseInt(localStorage.getItem(STORAGE_ADDED_RATINGS_KEY) || "0", 10);
-        localStorage.setItem(STORAGE_ADDED_HISTORY_KEY, (prevHistory + result.addedHistory).toString());
-        localStorage.setItem(STORAGE_ADDED_RATINGS_KEY, (prevRatings + result.addedRatings).toString());
+        const prevHistory = (await loadMetadata(STORAGE_ADDED_HISTORY_KEY)) || 0;
+        const prevRatings = (await loadMetadata(STORAGE_ADDED_RATINGS_KEY)) || 0;
+        await saveMetadata(STORAGE_ADDED_HISTORY_KEY, prevHistory + result.addedHistory);
+        await saveMetadata(STORAGE_ADDED_RATINGS_KEY, prevRatings + result.addedRatings);
     } else {
-        localStorage.setItem(STORAGE_ADDED_HISTORY_KEY, result.addedHistory.toString());
-        localStorage.setItem(STORAGE_ADDED_RATINGS_KEY, result.addedRatings.toString());
+        await saveMetadata(STORAGE_ADDED_HISTORY_KEY, result.addedHistory);
+        await saveMetadata(STORAGE_ADDED_RATINGS_KEY, result.addedRatings);
     }
 
     // 3. Extinction de l'état "en cours" de l'IHM

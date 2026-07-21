@@ -11,6 +11,8 @@ const TRANSLATIONS = {
         disconnected: "❌ Non connecté.",
         login: "Se connecter",
         logout: "Déconnexion",
+        viewToken: "Voir le token",
+        tokenValue: "Token d'accès : {token}",
         generatingCode: "Génération du code...",
         linking: "Liaison en cours...",
         actionRequired: "Action requise",
@@ -81,6 +83,9 @@ const TRANSLATIONS = {
         confidenceUncertain: "Incertain",
         confidenceAbsent: "Absent",
         confidenceError: "Erreur",
+        tooltipOpenImdb: "Ouvrir sur IMDb",
+        tooltipCopyApply: "Copier et appliquer",
+        tooltipViewTrakt: "Voir sur Trakt",
 
         // Section Movies
         moviesTitle: "Historique des visionnages de films ({count})",
@@ -109,6 +114,8 @@ const TRANSLATIONS = {
         disconnected: "❌ Not connected.",
         login: "Connect",
         logout: "Disconnect",
+        viewToken: "View Token",
+        tokenValue: "Access Token: {token}",
         generatingCode: "Generating code...",
         linking: "Linking in progress...",
         actionRequired: "Action Required",
@@ -179,6 +186,9 @@ const TRANSLATIONS = {
         confidenceUncertain: "Uncertain",
         confidenceAbsent: "Absent",
         confidenceError: "Error",
+        tooltipOpenImdb: "Open on IMDb",
+        tooltipCopyApply: "Copy and apply",
+        tooltipViewTrakt: "View on Trakt",
 
         // Movies Section
         moviesTitle: "Movies Watch History ({count})",

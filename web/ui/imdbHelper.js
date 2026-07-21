@@ -3,6 +3,18 @@ import { fetchShowSeasonsByTvdbId } from '../traktApi.js';
 
 let dialogElement = null;
 
+// Simple publish/subscribe mechanism for TVDB/IMDb correspondence
+const subscribers = new Set();
+
+export function subscribeToImdbUpdate(callback) {
+    subscribers.add(callback);
+    return () => subscribers.delete(callback);
+}
+
+function publishImdbUpdate(tvdbId, imdbId) {
+    subscribers.forEach(callback => callback(tvdbId, imdbId));
+}
+
 /**
  * Opens the IMDB helper dialog and inserts it before the target element
  * @param {HTMLElement} targetElement - The element before which to insert the dialog
@@ -46,9 +58,16 @@ export function openImdbHelperDialog(targetElement, episodes) {
                        target="_blank" 
                        rel="noopener noreferrer" 
                        style="margin-left: 5px; color: #3b82f6; text-decoration: none; font-size: 14px;"
-                       title="Ovrir sur IMDb">
+                       title="${t('tooltipOpenImdb')}">
                         🔗
                     </a>
+                    <button class="imdb-copy-btn" 
+                            data-tvdb-id="${ep.tvdbId}" 
+                            data-imdb-id="${imdbValue}"
+                            style="margin-left: 5px; background: none; border: none; cursor: pointer; font-size: 14px; padding: 0;"
+                            title="${t('tooltipCopyApply')}">
+                        📋
+                    </button>
                 `;
             }
             
@@ -59,7 +78,9 @@ export function openImdbHelperDialog(targetElement, episodes) {
                     <td style="padding: 10px; border-bottom: 1px solid #e5e7eb; text-align: center;"><input type="checkbox" ${ep.special ? 'checked' : ''} disabled style="cursor: default;"></td>
                     <td style="padding: 10px; border-bottom: 1px solid #e5e7eb;"><code>${ep.tvdbId || 'N/A'}</code></td>
                     <td style="padding: 10px; border-bottom: 1px solid #e5e7eb;">
-                        ${imdbCellContent}
+                        <div style="display: flex; align-items: center;">
+                            ${imdbCellContent}
+                        </div>
                     </td>
                     <td style="padding: 10px; border-bottom: 1px solid #e5e7eb;"></td>
                 </tr>
@@ -125,27 +146,53 @@ export function openImdbHelperDialog(targetElement, episodes) {
             const imdbValue = input.value.trim();
             const hasValidImdb = imdbValue && imdbValue !== '-1';
             const parentCell = input.parentElement;
+            const tvdbId = input.closest('tr')?.querySelector('code')?.textContent;
             
-            // Remove existing link if present
+            // Remove existing link and copy button if present
             const existingLink = parentCell.querySelector('a');
             if (existingLink) {
                 existingLink.remove();
             }
+            const existingCopyBtn = parentCell.querySelector('.imdb-copy-btn');
+            if (existingCopyBtn) {
+                existingCopyBtn.remove();
+            }
             
-            // Add link if IMDb ID is valid
+            // Add link and copy button if IMDb ID is valid
             if (hasValidImdb) {
                 const link = document.createElement('a');
                 link.href = `https://www.imdb.com/fr/title/${imdbValue}`;
                 link.target = '_blank';
                 link.rel = 'noopener noreferrer';
                 link.style.cssText = 'margin-left: 5px; color: #3b82f6; text-decoration: none; font-size: 14px;';
-                link.title = 'Ouvrir sur IMDb';
+                link.title = t('tooltipOpenImdb');
                 link.textContent = '🔗';
                 parentCell.appendChild(link);
+                
+                const copyBtn = document.createElement('button');
+                copyBtn.className = 'imdb-copy-btn';
+                copyBtn.dataset.tvdbId = tvdbId;
+                copyBtn.dataset.imdbId = imdbValue;
+                copyBtn.style.cssText = 'margin-left: 5px; background: none; border: none; cursor: pointer; font-size: 14px; padding: 0;';
+                copyBtn.title = t('tooltipCopyApply');
+                copyBtn.textContent = '📋';
+                copyBtn.onclick = () => {
+                    publishImdbUpdate(tvdbId, imdbValue);
+                };
+                parentCell.appendChild(copyBtn);
             }
         };
         
         input.addEventListener('input', updateLinkIcon);
+    });
+
+    // Setup copy button listeners for initial buttons
+    document.querySelectorAll('.imdb-copy-btn').forEach(btn => {
+        btn.onclick = () => {
+            const tvdbId = btn.dataset.tvdbId;
+            const imdbId = btn.dataset.imdbId;
+            publishImdbUpdate(tvdbId, imdbId);
+        };
     });
 
     // Setup search button listener
@@ -305,7 +352,7 @@ function updateEpisodeConfidence(index, confidenceType, episodeData, slug) {
             traktIcon.rel = 'noopener noreferrer';
             traktIcon.className = 'trakt-icon';
             traktIcon.style.cssText = 'margin-left: 5px; text-decoration: none;';
-            traktIcon.title = 'Voir sur Trakt';
+            traktIcon.title = t('tooltipViewTrakt');
             
             const traktImg = document.createElement('img');
             traktImg.src = 'https://app.trakt.tv/favicon.svg';
