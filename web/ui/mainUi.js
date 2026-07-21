@@ -2,6 +2,7 @@ import { getStoredToken } from '../traktApi.js';
 import { renderAuthUi, updateAuthElement, setupAuthListeners } from './authUi.js';
 import { renderMoviesUi, toggleMoviesVisibility, setupMoviesListeners } from './moviesUi.js';
 import { renderRatingsUi, toggleRatingsVisibility, setupRatingsListeners } from './ratingsUi.js';
+import { renderToolsUi, toggleToolsVisibility, setupToolsListeners } from './toolsUi.js';
 import { getLang, setLang, t } from './i18n.js';
 
 export async function initApplication() {
@@ -27,6 +28,7 @@ function buildGlobalStructure() {
         <div id="instructions-container"></div>
         <div id="ratings-container"></div>
         <div id="movies-container"></div>
+        <div id="tools-container"></div>
     `;
 }
 
@@ -46,12 +48,14 @@ async function renderAll() {
     renderAuthUi();
     await renderRatingsUi();
     renderMoviesUi();
+    renderToolsUi();
 }
 
 function setupAllListeners() {
     setupAuthListeners();
     setupRatingsListeners();
     setupMoviesListeners();
+    setupToolsListeners();
     setupLangListener();
 }
 
@@ -83,6 +87,7 @@ export function syncUiState() {
     updateAuthElement(isConnected);
     toggleRatingsVisibility(isConnected);
     toggleMoviesVisibility(isConnected);
+    toggleToolsVisibility(isConnected);
 
     if (isConnected) {
         const instructionsCard = document.getElementById('instructions-card');

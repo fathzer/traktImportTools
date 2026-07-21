@@ -102,7 +102,27 @@ const TRANSLATIONS = {
         btnUpdating: "En cours...",
         statusUpdatingMovie: "Modification de \"{title}\"...",
         statusUpdatedMovie: "✅ \"{title}\" mis à jour !",
-        invalidDate: "Date invalide."
+        invalidDate: "Date invalide.",
+        
+        // Tools Section
+        toolsTitle: "Outils divers",
+        toolsDesc: "Outil pour envoyer des requêtes directes à l'API Trakt.",
+        methodLabel: "Méthode",
+        urlLabel: "URL (chemin relatif)",
+        paramsLabel: "Paramètres d'URL",
+        addParam: "Ajouter un paramètre",
+        paramKey: "Clé",
+        paramValue: "Valeur",
+        bodyLabel: "Corps de la requête (JSON)",
+        bodyOptional: "optionnel pour POST/PUT/PATCH",
+        sendRequest: "Envoyer",
+        sending: "Envoi...",
+        responseCode: "Code HTTP",
+        responseHeaders: "Headers de réponse",
+        responseBody: "Corps de la réponse",
+        urlRequired: "Veuillez saisir une URL.",
+        notConnected: "Vous devez être connecté à Trakt.",
+        invalidJson: "JSON invalide dans le corps de la requête."
     },
     en: {
         title: "Trakt & TV Time Integration Fix",
@@ -205,7 +225,27 @@ const TRANSLATIONS = {
         btnUpdating: "Updating...",
         statusUpdatingMovie: "Updating \"{title}\"...",
         statusUpdatedMovie: "✅ \"{title}\" updated!",
-        invalidDate: "Invalid date."
+        invalidDate: "Invalid date.",
+        
+        // Tools Section
+        toolsTitle: "Miscellaneous Tools",
+        toolsDesc: "Tool to send direct requests to the Trakt API.",
+        methodLabel: "Method",
+        urlLabel: "URL (relative path)",
+        paramsLabel: "URL Parameters",
+        addParam: "Add parameter",
+        paramKey: "Key",
+        paramValue: "Value",
+        bodyLabel: "Request Body (JSON)",
+        bodyOptional: "optional for POST/PUT/PATCH",
+        sendRequest: "Send",
+        sending: "Sending...",
+        responseCode: "HTTP Code",
+        responseHeaders: "Response Headers",
+        responseBody: "Response Body",
+        urlRequired: "Please enter a URL.",
+        notConnected: "You must be connected to Trakt.",
+        invalidJson: "Invalid JSON in request body."
     }
 };
 
